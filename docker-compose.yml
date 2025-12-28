@@ -1,51 +1,79 @@
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  pg-database:
+    driver: local
+  vendor:
+    driver: local
+
 services:
-  ec-cube2:
+  ec-cube:
     build:
       context: .
       dockerfile: Dockerfile
+    entrypoint: /wait-for-pgsql.sh
+    command: apache2-foreground
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:80"
+      - "4430:443"
     environment:
-      # eccube_install.sh のデフォルト値を使用
-      - DBSERVER=db
-      - DBNAME=eccube_db
-      - DBUSER=eccube_db_user
-      - DBPASS=password
-      # EcAuth 設定（必要に応じて .env で上書き）
-      - ECAUTH_CLIENT_ID
-      - ECAUTH_CLIENT_SECRET
-      - ECAUTH_AUTHORIZATION_ENDPOINT
-      - ECAUTH_TOKEN_ENDPOINT
-      - ECAUTH_USERINFO_ENDPOINT
-      - ECAUTH_EXTERNAL_USERINFO_ENDPOINT
-      - ECAUTH_PROVIDER_NAME
-    depends_on:
-      db:
-        condition: service_healthy
+      TZ: Asia/Tokyo
+      PHP_POST_MAX_SIZE: 10M
+      PHP_UPLOAD_MAX_FILESIZE: 10M
+      PHP_LOG_ERRORS: "On"
+      PHP_ERROR_REPORTING: "E_ALL"
+      PHP_ERROR_LOG: "/proc/self/fd/2"
+      # EC-CUBE2 Config
+      HTTP_URL: https://localhost:4430/
+      HTTPS_URL: https://localhost:4430/
+      ROOT_URLPATH: /
+      DOMAIN_NAME: ~
+      DB_TYPE: pgsql
+      DB_USER: eccube_db_user
+      DB_PASSWORD: password
+      DB_SERVER: postgres
+      DB_NAME: eccube_db
+      DB_PORT: 5432
+      ADMIN_DIR: admin/
+      ADMIN_FORCE_SSL: 'false'
+      ADMIN_ALLOW_HOSTS: 'a:0:{}'
+      AUTH_MAGIC: ~
+      PASSWORD_HASH_ALGOS: sha256
+      # EcAuth 設定（.env で上書き）
+      ECAUTH_CLIENT_ID: ${ECAUTH_CLIENT_ID:-}
+      ECAUTH_CLIENT_SECRET: ${ECAUTH_CLIENT_SECRET:-}
+      ECAUTH_AUTHORIZATION_ENDPOINT: ${ECAUTH_AUTHORIZATION_ENDPOINT:-}
+      ECAUTH_TOKEN_ENDPOINT: ${ECAUTH_TOKEN_ENDPOINT:-}
+      ECAUTH_USERINFO_ENDPOINT: ${ECAUTH_USERINFO_ENDPOINT:-}
+      ECAUTH_EXTERNAL_USERINFO_ENDPOINT: ${ECAUTH_EXTERNAL_USERINFO_ENDPOINT:-}
+      ECAUTH_PROVIDER_NAME: ${ECAUTH_PROVIDER_NAME:-federate-oauth2}
+    volumes:
+      - "vendor:/var/www/app/data/vendor"
     networks:
-      - ecauth-network
+      - backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  db:
+  postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=eccube_db
-      - POSTGRES_USER=eccube_db_user
-      - POSTGRES_PASSWORD=password
+      TZ: Asia/Tokyo
+      POSTGRES_DB: eccube_db
+      POSTGRES_USER: eccube_db_user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "15432:5432"
     volumes:
-      - db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U eccube_db_user -d eccube_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - pg-database:/var/lib/postgresql/data
     networks:
-      - ecauth-network
-
-volumes:
-  db-data:
-
-networks:
-  ecauth-network:
-    driver: bridge
+      - backend
+    healthcheck:
+      test: pg_isready -U eccube_db_user -d eccube_db
+      interval: 3s
+      timeout: 3s
+      retries: 10

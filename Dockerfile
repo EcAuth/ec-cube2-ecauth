@@ -1,55 +1,32 @@
-FROM php:7.4-apache
+# EC-CUBE 2 公式イメージをベースに使用
+FROM ghcr.io/ec-cube/ec-cube2-php:7.4-apache-eccube-2.25.0
 
-# 必要なパッケージのインストール
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    unzip \
-    git \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_pgsql \
-        pgsql \
-        pdo_mysql \
-        mysqli \
-        zip \
-        gd \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# プラグインファイルをコピー（公式イメージのパスは /var/www/app）
+COPY plugin/EcAuthLogin2 /var/www/app/data/downloads/plugin/EcAuthLogin2/
+COPY data/class/helper/SC_Helper_EcAuth.php /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class/helper/
+COPY data/class/pages /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class/pages/
+COPY data/class_extends /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class_extends/
+COPY html/ecauth /var/www/app/data/downloads/plugin/EcAuthLogin2/html/ecauth/
+COPY data/Smarty/templates /var/www/app/data/downloads/plugin/EcAuthLogin2/data/Smarty/templates/
 
-# Apache mod_rewrite 有効化
-RUN a2enmod rewrite ssl
+# EC-CUBE が使用するディレクトリにもファイルをコピー
+# SC_Helper_EcAuth.php
+COPY data/class/helper/SC_Helper_EcAuth.php /var/www/app/data/class/helper/
 
-# Composer インストール
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# callback.php と関連ページクラス
+COPY html/ecauth /var/www/app/html/ecauth/
+COPY data/class/pages/ecauth /var/www/app/data/class/pages/ecauth/
+COPY data/class_extends/page_extends/ecauth /var/www/app/data/class_extends/page_extends/ecauth/
 
-# EC-CUBE 2 ダウンロード
-ARG ECCUBE_VERSION=2.17.2
-RUN curl -L https://github.com/EC-CUBE/ec-cube2/archive/refs/tags/${ECCUBE_VERSION}.tar.gz | tar xz -C /tmp \
-    && mv /tmp/ec-cube2-${ECCUBE_VERSION}/* /var/www/html/ \
-    && rm -rf /tmp/ec-cube2-${ECCUBE_VERSION}
-
-# プラグインファイルをコピー
-COPY plugin/EcAuthLogin2 /var/www/html/data/downloads/plugin/EcAuthLogin2/
-COPY data/class/helper/SC_Helper_EcAuth.php /var/www/html/data/downloads/plugin/EcAuthLogin2/data/class/helper/
-COPY data/class/pages /var/www/html/data/downloads/plugin/EcAuthLogin2/data/class/pages/
-COPY data/class_extends /var/www/html/data/downloads/plugin/EcAuthLogin2/data/class_extends/
-COPY html/ecauth /var/www/html/data/downloads/plugin/EcAuthLogin2/html/ecauth/
-COPY data/Smarty/templates /var/www/html/data/downloads/plugin/EcAuthLogin2/data/Smarty/templates/
-
-# エントリーポイント
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# プラグインインストールスクリプトをコピー
+COPY install-plugin.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/install-plugin.sh
 
 # 権限設定
-RUN chown -R www-data:www-data /var/www/html
+RUN chown -R www-data:www-data /var/www/app/data/downloads/plugin/EcAuthLogin2 \
+    && chown -R www-data:www-data /var/www/app/data/class/helper/SC_Helper_EcAuth.php \
+    && chown -R www-data:www-data /var/www/app/html/ecauth/ \
+    && chown -R www-data:www-data /var/www/app/data/class/pages/ecauth/ \
+    && chown -R www-data:www-data /var/www/app/data/class_extends/page_extends/ecauth/
 
-WORKDIR /var/www/html
-
-EXPOSE 80 443
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["apache2-foreground"]
+WORKDIR /var/www/app

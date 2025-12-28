@@ -84,7 +84,7 @@ class SC_Helper_EcAuth
 
         // provider_name があれば追加
         if (!empty($config['provider_name'])) {
-            $params['provider'] = $config['provider_name'];
+            $params['provider_name'] = $config['provider_name'];
         }
 
         $url = $config['authorization_endpoint'] . '?' . http_build_query($params);
@@ -108,6 +108,10 @@ class SC_Helper_EcAuth
     {
         $config = $this->getConfig();
 
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: token_endpoint=' . $config['token_endpoint']);
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: redirect_uri=' . $redirectUri);
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: client_id=' . $config['client_id']);
+
         $params = array(
             'grant_type' => 'authorization_code',
             'code' => $code,
@@ -120,8 +124,11 @@ class SC_Helper_EcAuth
         $response = $this->httpPost($config['token_endpoint'], $params);
 
         if ($response === false) {
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: httpPost returned false');
             return false;
         }
+
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: response=' . $response);
 
         $tokens = json_decode($response, true);
 
@@ -134,6 +141,7 @@ class SC_Helper_EcAuth
             return false;
         }
 
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] exchangeCodeForTokens: token exchange successful');
         return $tokens;
     }
 
@@ -213,9 +221,13 @@ class SC_Helper_EcAuth
      */
     public function findOrCreateCustomer($ecauthSubject, $externalUserInfo = array())
     {
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: subject=' . $ecauthSubject);
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: externalUserInfo=' . print_r($externalUserInfo, true));
+
         $objQuery = SC_Query_Ex::getSingletonInstance();
 
         // 既存顧客を検索
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: searching existing customer...');
         $customer = $objQuery->getRow(
             '*',
             'dtb_customer',
@@ -224,8 +236,11 @@ class SC_Helper_EcAuth
         );
 
         if (!empty($customer)) {
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: found existing customer_id=' . $customer['customer_id']);
             return $customer;
         }
+
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: customer not found, creating new one...');
 
         // 新規顧客作成
         $arrCustomer = array(
@@ -256,7 +271,14 @@ class SC_Helper_EcAuth
             $arrCustomer['name02'] = 'ユーザー';
         }
 
-        $objQuery->insert('dtb_customer', $arrCustomer);
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: inserting customer=' . print_r($arrCustomer, true));
+
+        try {
+            $objQuery->insert('dtb_customer', $arrCustomer);
+        } catch (Exception $e) {
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: insert failed: ' . $e->getMessage());
+            return false;
+        }
 
         // 作成した顧客を取得
         $customer = $objQuery->getRow(
@@ -265,6 +287,8 @@ class SC_Helper_EcAuth
             'ecauth_subject = ? AND del_flg = 0',
             array($ecauthSubject)
         );
+
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: created customer_id=' . (isset($customer['customer_id']) ? $customer['customer_id'] : 'NULL'));
 
         return $customer;
     }
@@ -277,13 +301,30 @@ class SC_Helper_EcAuth
      */
     public function loginCustomer($customer)
     {
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: customer_id=' . (isset($customer['customer_id']) ? $customer['customer_id'] : 'NULL'));
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: email=' . (isset($customer['email']) ? $customer['email'] : 'NULL'));
+
         $objCustomer = new SC_Customer_Ex();
-        $objCustomer->setLogin($customer['email']);
+
+        if (empty($customer['email'])) {
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: WARNING - email is empty, login may fail');
+        }
+
+        try {
+            $objCustomer->setLogin($customer['email']);
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: setLogin completed');
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: isLoginSuccess=' . ($objCustomer->isLoginSuccess() ? 'true' : 'false'));
+        } catch (Exception $e) {
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: setLogin failed: ' . $e->getMessage());
+        }
 
         // セッション再生成（セキュリティ対策）
         if (function_exists('session_regenerate_id')) {
             session_regenerate_id(true);
+            GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: session regenerated');
         }
+
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] loginCustomer: completed');
     }
 
     /**

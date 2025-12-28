@@ -2,11 +2,18 @@
 /**
  * EcAuthLogin2 プラグインメインクラス
  *
+ * SC_Plugin_Base を継承すると EC-CUBE 2.17+ でエラーになるため
+ * マジックメソッドを使用して実装
+ * @see https://github.com/EC-CUBE/ec-cube2/issues/551
+ *
  * @package EcAuthLogin2
  * @version 1.0.0
  */
-class EcAuthLogin2 extends SC_Plugin_Base
+class EcAuthLogin2
 {
+    /** @var array プラグイン情報 */
+    protected $arrSelfInfo;
+
     /**
      * コンストラクタ
      *
@@ -14,16 +21,63 @@ class EcAuthLogin2 extends SC_Plugin_Base
      */
     public function __construct(array $arrSelfInfo)
     {
-        parent::__construct($arrSelfInfo);
+        $this->arrSelfInfo = $arrSelfInfo;
     }
 
     /**
-     * インストール
+     * 静的メソッド呼び出しのマジックメソッド
+     *
+     * @param string $name メソッド名
+     * @param array $arguments 引数
+     * @return mixed
+     */
+    public static function __callStatic($name, $arguments)
+    {
+        switch ($name) {
+            case 'install':
+                // 静的呼び出しの場合
+                $instance = new self($arguments[0]);
+                return $instance->doInstall($arguments[0]);
+            case 'uninstall':
+                $instance = new self($arguments[0]);
+                return $instance->doUninstall($arguments[0]);
+            case 'enable':
+                $instance = new self($arguments[0]);
+                return $instance->doEnable($arguments[0]);
+            case 'disable':
+                $instance = new self($arguments[0]);
+                return $instance->doDisable($arguments[0]);
+        }
+    }
+
+    /**
+     * インスタンスメソッド呼び出しのマジックメソッド
+     *
+     * @param string $name メソッド名
+     * @param array $arguments 引数
+     * @return mixed
+     */
+    public function __call($name, $arguments)
+    {
+        switch ($name) {
+            case 'install':
+                return $this->doInstall($arguments[0]);
+            case 'uninstall':
+                return $this->doUninstall($arguments[0]);
+            case 'enable':
+                return $this->doEnable($arguments[0]);
+            case 'disable':
+                return $this->doDisable($arguments[0]);
+        }
+    }
+
+    /**
+     * インストール処理
      *
      * @param array $arrPlugin プラグイン情報
      * @return void
      */
-    public function install($arrPlugin)
+    protected function doInstall($arrPlugin)
     {
         // dtb_customer に ecauth_subject カラムを追加
         $this->addEcAuthSubjectColumn();
@@ -33,12 +87,12 @@ class EcAuthLogin2 extends SC_Plugin_Base
     }
 
     /**
-     * アンインストール
+     * アンインストール処理
      *
      * @param array $arrPlugin プラグイン情報
      * @return void
      */
-    public function uninstall($arrPlugin)
+    protected function doUninstall($arrPlugin)
     {
         // コピーしたファイルを削除
         $this->removeFiles();
@@ -47,23 +101,23 @@ class EcAuthLogin2 extends SC_Plugin_Base
     }
 
     /**
-     * 有効化
+     * 有効化処理
      *
      * @param array $arrPlugin プラグイン情報
      * @return void
      */
-    public function enable($arrPlugin)
+    protected function doEnable($arrPlugin)
     {
         // 特に処理なし
     }
 
     /**
-     * 無効化
+     * 無効化処理
      *
      * @param array $arrPlugin プラグイン情報
      * @return void
      */
-    public function disable($arrPlugin)
+    protected function doDisable($arrPlugin)
     {
         // 特に処理なし
     }
@@ -72,13 +126,31 @@ class EcAuthLogin2 extends SC_Plugin_Base
      * 処理の介入箇所とコールバック関数を設定
      *
      * @param SC_Helper_Plugin $objHelperPlugin
+     * @param int $priority
      * @return void
      */
-    public function register(SC_Helper_Plugin $objHelperPlugin)
+    public function register(SC_Helper_Plugin $objHelperPlugin, $priority)
     {
-        $priority = null;
+        if (isset($this->arrSelfInfo['plugin_hook_point'])) {
+            $arrHookPoints = $this->arrSelfInfo['plugin_hook_point'];
+            foreach ($arrHookPoints as $hook_point) {
+                if (isset($hook_point['callback'])) {
+                    $hook_point_name = $hook_point['hook_point'];
+                    $callback_name = $hook_point['callback'];
+                    $objHelperPlugin->addAction($hook_point_name, array($this, $callback_name), $priority);
+                }
+            }
+        }
+    }
 
-        return parent::register($objHelperPlugin, $priority);
+    /**
+     * プラグイン情報を取得
+     *
+     * @return array
+     */
+    public function getPluginInfo()
+    {
+        return $this->arrSelfInfo;
     }
 
     /**
@@ -123,8 +195,9 @@ class EcAuthLogin2 extends SC_Plugin_Base
         $button = $this->generateLoginButton($context);
 
         // 挿入位置を探す
-        // ログインボタンの後に挿入
-        $pattern = '/(<input[^>]*type=["\']submit["\'][^>]*class=["\'][^"\']*btn[^"\']*["\'][^>]*>)/i';
+        // ログインボタン（type="image" または type="submit"）の後に挿入
+        // EC-CUBE 2.25 デフォルトテンプレートは type="image" を使用
+        $pattern = '/(<input[^>]*type=["\'](?:submit|image)["\'][^>]*(?:alt=["\']ログイン["\']|class=["\'][^"\']*btn[^"\']*["\'])[^>]*\/>)/iu';
 
         if (preg_match($pattern, $source)) {
             $source = preg_replace(
@@ -133,6 +206,17 @@ class EcAuthLogin2 extends SC_Plugin_Base
                 $source,
                 1  // 最初の1つだけ置換
             );
+        } else {
+            // フォールバック: btn_area の最初の </ul> の後に挿入
+            $fallbackPattern = '/(<div class="btn_area">.*?<\/ul>)/is';
+            if (preg_match($fallbackPattern, $source)) {
+                $source = preg_replace(
+                    $fallbackPattern,
+                    '$1' . "\n" . '<li>' . $button . '</li>',
+                    $source,
+                    1
+                );
+            }
         }
     }
 
