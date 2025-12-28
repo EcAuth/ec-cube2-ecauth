@@ -1,0 +1,14 @@
+parameters:
+    level: 5
+    paths:
+        - data/class
+    excludePaths:
+        - vendor
+    scanDirectories:
+        - vendor/ec-cube/ec-cube2/data/class
+        - vendor/nanasess/ec-cube2-class-extends-stubs/stubs
+    bootstrapFiles:
+        - vendor/autoload.php
+    ignoreErrors:
+        - '#Call to an undefined method SC_Query::#'
+        - '#Access to an undefined property SC_#'

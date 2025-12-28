@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create plugin package
+        run: |
+          mkdir -p dist/EcAuthLogin2
+
+          # プラグイン本体
+          cp -r plugin/EcAuthLogin2/* dist/EcAuthLogin2/
+
+          # クラスファイル
+          mkdir -p dist/EcAuthLogin2/data/class/helper
+          mkdir -p dist/EcAuthLogin2/data/class/pages/ecauth
+          cp data/class/helper/SC_Helper_EcAuth.php dist/EcAuthLogin2/data/class/helper/
+          cp data/class/pages/ecauth/LC_Page_EcAuth_Callback.php dist/EcAuthLogin2/data/class/pages/ecauth/
+
+          # 拡張クラスファイル
+          mkdir -p dist/EcAuthLogin2/data/class_extends/page_extends/ecauth
+          cp data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Callback_Ex.php dist/EcAuthLogin2/data/class_extends/page_extends/ecauth/
+
+          # HTMLファイル
+          mkdir -p dist/EcAuthLogin2/html/ecauth
+          cp html/ecauth/callback.php dist/EcAuthLogin2/html/ecauth/
+
+          # テンプレートファイル
+          mkdir -p dist/EcAuthLogin2/data/Smarty/templates/default/ecauth
+          cp data/Smarty/templates/default/ecauth/*.tpl dist/EcAuthLogin2/data/Smarty/templates/default/ecauth/
+
+          # パッケージ作成
+          cd dist
+          tar -czvf EcAuthLogin2-${{ github.ref_name }}.tar.gz EcAuthLogin2
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/EcAuthLogin2-${{ github.ref_name }}.tar.gz

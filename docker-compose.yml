@@ -1,0 +1,51 @@
+services:
+  ec-cube2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      # eccube_install.sh のデフォルト値を使用
+      - DBSERVER=db
+      - DBNAME=eccube_db
+      - DBUSER=eccube_db_user
+      - DBPASS=password
+      # EcAuth 設定（必要に応じて .env で上書き）
+      - ECAUTH_CLIENT_ID
+      - ECAUTH_CLIENT_SECRET
+      - ECAUTH_AUTHORIZATION_ENDPOINT
+      - ECAUTH_TOKEN_ENDPOINT
+      - ECAUTH_USERINFO_ENDPOINT
+      - ECAUTH_EXTERNAL_USERINFO_ENDPOINT
+      - ECAUTH_PROVIDER_NAME
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ecauth-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=eccube_db
+      - POSTGRES_USER=eccube_db_user
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eccube_db_user -d eccube_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecauth-network
+
+volumes:
+  db-data:
+
+networks:
+  ecauth-network:
+    driver: bridge

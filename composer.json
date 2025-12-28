@@ -1,0 +1,42 @@
+{
+    "name": "ecauth/ec-cube2-ecauth",
+    "description": "EC-CUBE 2系向け EcAuth ソーシャルログインプラグイン",
+    "type": "library",
+    "license": "LGPL-2.1-or-later",
+    "authors": [
+        {
+            "name": "Kentaro Ohkouchi",
+            "email": "nanasess@fsm.ne.jp"
+        }
+    ],
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "autoload": {
+        "classmap": [
+            "data/class"
+        ]
+    },
+    "require-dev": {
+        "ec-cube/ec-cube2": "dev-master@dev",
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "nanasess/ec-cube2-class-extends-stubs": "^1.0",
+        "phpstan/phpstan": "^1.10",
+        "phpunit/phpunit": "^8.4 || ^9.0",
+        "rector/rector": "^1.0"
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/EC-CUBE/ec-cube2"
+        }
+    ],
+    "scripts": {
+        "phpstan": "phpstan analyse",
+        "rector": "rector process --dry-run",
+        "rector:fix": "rector process",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix"
+    }
+}
