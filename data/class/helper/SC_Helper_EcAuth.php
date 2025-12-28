@@ -242,13 +242,19 @@ class SC_Helper_EcAuth
 
         GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: customer not found, creating new one...');
 
-        // 新規顧客作成
+        // 新規顧客作成（PostgreSQL ではシーケンスから customer_id を取得）
+        $customerId = $objQuery->nextVal('dtb_customer_customer_id');
+        GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: new customer_id=' . $customerId);
+
         $arrCustomer = array(
+            'customer_id' => $customerId,
             'ecauth_subject' => $ecauthSubject,
             'status' => 2, // 本会員
             'create_date' => 'CURRENT_TIMESTAMP',
             'update_date' => 'CURRENT_TIMESTAMP',
             'del_flg' => 0,
+            'secret_key' => $this->generateRandomString(32), // NOT NULL
+            'point' => 0, // NOT NULL
         );
 
         // 外部IdP情報からフィールドを設定
@@ -269,6 +275,10 @@ class SC_Helper_EcAuth
         }
         if (empty($arrCustomer['name02'])) {
             $arrCustomer['name02'] = 'ユーザー';
+        }
+        // email は NOT NULL のため、一意のダミーメールを設定
+        if (empty($arrCustomer['email'])) {
+            $arrCustomer['email'] = 'ecauth_' . $customerId . '@example.com';
         }
 
         GC_Utils_Ex::gfPrintLog('[EcAuth Helper] findOrCreateCustomer: inserting customer=' . print_r($arrCustomer, true));

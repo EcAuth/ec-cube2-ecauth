@@ -163,13 +163,17 @@ class EcAuthLogin2
      */
     public function prefilterTransform(&$source, LC_Page_Ex $objPage, $filename)
     {
+        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] prefilterTransform called: filename=' . $filename);
+
         // マイページログインページ
         if ($filename === 'mypage/login.tpl') {
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Inserting login button for mypage');
             $this->insertLoginButton($source, 'mypage');
         }
 
         // 購入手続きページ（ログインフォーム）
         if ($filename === 'shopping/index.tpl') {
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Inserting login button for shopping');
             $this->insertLoginButton($source, 'shopping');
         }
     }
@@ -183,39 +187,54 @@ class EcAuthLogin2
      */
     protected function insertLoginButton(&$source, $context)
     {
+        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] insertLoginButton called: context=' . $context);
+
         $objHelper = new SC_Helper_EcAuth();
         $config = $objHelper->getConfig();
 
+        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Config: ' . print_r($config, true));
+
         // 設定がない場合は何もしない
         if (empty($config['client_id'])) {
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] client_id is empty, skipping');
             return;
         }
 
         // ボタン生成
         $button = $this->generateLoginButton($context);
+        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Generated button HTML: ' . substr($button, 0, 100) . '...');
 
         // 挿入位置を探す
         // ログインボタン（type="image" または type="submit"）の後に挿入
         // EC-CUBE 2.25 デフォルトテンプレートは type="image" を使用
-        $pattern = '/(<input[^>]*type=["\'](?:submit|image)["\'][^>]*(?:alt=["\']ログイン["\']|class=["\'][^"\']*btn[^"\']*["\'])[^>]*\/>)/iu';
+        // 属性の順序に依存しない正規表現に修正
+        $pattern = '/(<input[^>]*alt=["\']ログイン["\'][^>]*\/>)/iu';
 
-        if (preg_match($pattern, $source)) {
+        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Searching for pattern in source (length=' . strlen($source) . ')');
+
+        if (preg_match($pattern, $source, $matches)) {
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Pattern matched: ' . $matches[0]);
             $source = preg_replace(
                 $pattern,
                 '$1' . "\n" . $button,
                 $source,
                 1  // 最初の1つだけ置換
             );
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Button inserted successfully');
         } else {
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Pattern not matched, trying fallback');
             // フォールバック: btn_area の最初の </ul> の後に挿入
             $fallbackPattern = '/(<div class="btn_area">.*?<\/ul>)/is';
-            if (preg_match($fallbackPattern, $source)) {
+            if (preg_match($fallbackPattern, $source, $matches)) {
+                GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Fallback pattern matched');
                 $source = preg_replace(
                     $fallbackPattern,
                     '$1' . "\n" . '<li>' . $button . '</li>',
                     $source,
                     1
                 );
+            } else {
+                GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Fallback pattern also not matched');
             }
         }
     }
@@ -229,15 +248,17 @@ class EcAuthLogin2
     protected function generateLoginButton($context)
     {
         $objHelper = new SC_Helper_EcAuth();
-        $callbackUrl = HTTPS_URL . 'ecauth/callback.php';
-        $authInfo = $objHelper->getAuthorizationUrl($callbackUrl);
         $config = $objHelper->getConfig();
 
         $providerName = !empty($config['provider_name']) ? $config['provider_name'] : 'EcAuth';
 
+        // 認可リクエストエンドポイントへのリンク
+        // state/code_verifier はこのエンドポイントで生成・保存される
+        $authorizeUrl = HTTPS_URL . 'ecauth/authorize.php';
+
         $html = <<<HTML
 <div class="ecauth-login-button" style="margin-top: 15px; text-align: center;">
-    <a href="{$authInfo['url']}" class="btn btn-primary" style="background-color: #4285f4; border-color: #4285f4; color: #fff; padding: 10px 20px; text-decoration: none; display: inline-block; border-radius: 4px;">
+    <a href="{$authorizeUrl}" class="btn btn-primary" style="background-color: #4285f4; border-color: #4285f4; color: #fff; padding: 10px 20px; text-decoration: none; display: inline-block; border-radius: 4px;">
         {$providerName} でログイン
     </a>
 </div>
@@ -290,6 +311,10 @@ HTML;
             copy($pluginDir . 'html/ecauth/callback.php', $htmlDir . 'callback.php');
         }
 
+        if (is_file($pluginDir . 'html/ecauth/authorize.php')) {
+            copy($pluginDir . 'html/ecauth/authorize.php', $htmlDir . 'authorize.php');
+        }
+
         // data/class/ ディレクトリへのファイルコピー
         $classDir = CLASS_REALDIR . 'pages/ecauth/';
         if (!is_dir($classDir)) {
@@ -300,6 +325,13 @@ HTML;
             copy(
                 $pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Callback.php',
                 $classDir . 'LC_Page_EcAuth_Callback.php'
+            );
+        }
+
+        if (is_file($pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Authorize.php')) {
+            copy(
+                $pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Authorize.php',
+                $classDir . 'LC_Page_EcAuth_Authorize.php'
             );
         }
 
@@ -325,6 +357,13 @@ HTML;
             );
         }
 
+        if (is_file($pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Authorize_Ex.php')) {
+            copy(
+                $pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Authorize_Ex.php',
+                $extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php'
+            );
+        }
+
         GC_Utils_Ex::gfPrintLog('EcAuthLogin2: ファイルをコピーしました');
     }
 
@@ -341,6 +380,9 @@ HTML;
             if (is_file($htmlDir . 'callback.php')) {
                 unlink($htmlDir . 'callback.php');
             }
+            if (is_file($htmlDir . 'authorize.php')) {
+                unlink($htmlDir . 'authorize.php');
+            }
             rmdir($htmlDir);
         }
 
@@ -349,6 +391,9 @@ HTML;
         if (is_dir($classDir)) {
             if (is_file($classDir . 'LC_Page_EcAuth_Callback.php')) {
                 unlink($classDir . 'LC_Page_EcAuth_Callback.php');
+            }
+            if (is_file($classDir . 'LC_Page_EcAuth_Authorize.php')) {
+                unlink($classDir . 'LC_Page_EcAuth_Authorize.php');
             }
             rmdir($classDir);
         }
@@ -364,6 +409,9 @@ HTML;
         if (is_dir($extendsDir)) {
             if (is_file($extendsDir . 'LC_Page_EcAuth_Callback_Ex.php')) {
                 unlink($extendsDir . 'LC_Page_EcAuth_Callback_Ex.php');
+            }
+            if (is_file($extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php')) {
+                unlink($extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php');
             }
             rmdir($extendsDir);
         }
