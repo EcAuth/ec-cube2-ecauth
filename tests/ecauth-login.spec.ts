@@ -40,7 +40,7 @@ test.describe('EcAuth ソーシャルログイン', () => {
     await ecauthButton.click();
 
     // EcAuth IdP の認可エンドポイントにリダイレクトされる
-    await page.waitForURL(/\/authorization/);
+    await page.waitForURL(/\/v1\/authorization/);
 
     // MockIdP のログインフォームが表示される
     await page.waitForURL(new RegExp(mockIdpBaseUrl));
