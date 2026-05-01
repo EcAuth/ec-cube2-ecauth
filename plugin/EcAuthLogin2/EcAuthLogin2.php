@@ -243,6 +243,19 @@ class EcAuthLogin2
             return;
         }
 
+        // テンプレートは file_get_contents で読み込まれるため Smarty 経路を通らない。
+        // {$smarty.const.HTTPS_URL} の展開も効かないので、サブディレクトリインストール
+        // (ROOT_URLPATH=/shop/ 等) でも正しく解決される絶対 URL をプレースホルダ置換で埋め込む。
+        $httpsUrl = rtrim(HTTPS_URL, '/');
+        $script = str_replace(
+            array('%%ECAUTH_OPTIONS_URL%%', '%%ECAUTH_VERIFY_URL%%'),
+            array(
+                $httpsUrl . '/ecauth/passkey/authenticate-options.php',
+                $httpsUrl . '/ecauth/passkey/authenticate-verify.php',
+            ),
+            $script
+        );
+
         // </body> 直前に挿入（無い場合は末尾追加）
         if (stripos($source, '</body>') !== false) {
             $source = preg_replace('/<\/body>/i', $script . "\n</body>", $source, 1);

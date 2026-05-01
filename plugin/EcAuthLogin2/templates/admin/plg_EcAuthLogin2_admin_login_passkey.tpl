@@ -41,9 +41,12 @@
         passkeyBtn.addEventListener('click', function () {
             passkeyBtn.disabled = true;
             passkeyBtn.textContent = '認証中...';
+            // URL は EcAuthLogin2::insertAdminPasskeyScript() で HTTPS_URL を
+            // 基底にプレースホルダ置換される。サブディレクトリインストール
+            // (ROOT_URLPATH=/shop/ 等) でも正しい絶対 URL が埋め込まれる。
             EcAuth.webauthn.authenticate({
-                optionsUrl: location.origin + '/ecauth/passkey/authenticate-options.php',
-                verifyUrl: location.origin + '/ecauth/passkey/authenticate-verify.php'
+                optionsUrl: '%%ECAUTH_OPTIONS_URL%%',
+                verifyUrl: '%%ECAUTH_VERIFY_URL%%'
             }).then(function (result) {
                 if (result && result.redirect_url) {
                     window.location.href = result.redirect_url;
