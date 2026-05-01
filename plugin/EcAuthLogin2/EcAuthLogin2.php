@@ -272,9 +272,19 @@ class EcAuthLogin2
             return;
         }
 
-        $fallbackPattern = '/(<div class="btn_area">.*?<\/ul>)/is';
+        // </ul> の直前に <li> を挿入する。$1（btn_area の中身）と $2（</ul>）を分離キャプチャして
+        // <li> をリスト内側に配置することで、無効な HTML（<ul>...</ul><li>...</li>）になるのを防ぐ。
+        // $button にメタ文字（$0 等）が含まれた場合の preg_replace 衝突も avoid するため callback 形式。
+        $fallbackPattern = '/(<div class="btn_area">.*?)(<\/ul>)/is';
         if (preg_match($fallbackPattern, $source)) {
-            $source = preg_replace($fallbackPattern, '$1' . "\n" . '<li>' . $button . '</li>', $source, 1);
+            $source = preg_replace_callback(
+                $fallbackPattern,
+                function ($matches) use ($button) {
+                    return $matches[1] . "\n" . '<li>' . $button . '</li>' . $matches[2];
+                },
+                $source,
+                1
+            );
         }
     }
 
