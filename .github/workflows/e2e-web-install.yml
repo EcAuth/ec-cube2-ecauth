@@ -34,7 +34,7 @@ jobs:
           docker compose up -d --build
           # Wait for EC-CUBE to become ready
           for i in $(seq 1 60); do
-            if curl -sk "https://localhost:24430/" >/dev/null 2>&1; then
+            if curl -sk "https://localhost:8081/" >/dev/null 2>&1; then
               echo "EC-CUBE is up"
               break
             fi
@@ -59,7 +59,7 @@ jobs:
 
       - name: Run web-install E2E
         env:
-          ECCUBE_BASE_URL: 'https://localhost:24430'
+          ECCUBE_BASE_URL: 'https://localhost:8081'
           ECCUBE_ADMIN_BASE: '/admin/'
           ECCUBE_ADMIN_LOGIN_ID: admin
           ECCUBE_ADMIN_PASSWORD: password
