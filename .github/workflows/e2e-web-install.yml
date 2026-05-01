@@ -92,18 +92,25 @@ jobs:
 
       - name: Dump plugin DB state and filesystem on failure
         if: failure()
+        timeout-minutes: 2
         run: |
-          echo "=== dtb_plugin ==="
-          docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
-            "SELECT plugin_id, plugin_code, plugin_name, enable, class_name FROM dtb_plugin ORDER BY plugin_id;" || true
-          echo "=== dtb_plugin_hookpoint ==="
-          docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
-            "SELECT plugin_id, hook_point, callback FROM dtb_plugin_hookpoint ORDER BY plugin_id;" || true
-          echo "=== PLUGIN_UPLOAD_REALDIR contents ==="
-          docker compose exec -T ec-cube ls -la /var/www/app/data/downloads/plugin/ || true
-          docker compose exec -T ec-cube ls -la /var/www/app/data/downloads/plugin/EcAuthLogin2/ 2>&1 | head -20 || true
-          echo "=== Apache error.log (last 100 lines) ==="
-          docker compose exec -T ec-cube tail -100 /var/log/apache2/error.log 2>&1 || true
+          # 各 docker compose exec を個別に timeout でラップして、apache がハングしても
+          # ステップ全体が止まらないようにする
+          run_step() {
+            local label="$1"
+            shift
+            echo "=== ${label} ==="
+            timeout 15 "$@" 2>&1 || echo "[step '${label}' timed out or failed]"
+          }
+          run_step "dtb_plugin" docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
+            "SELECT plugin_id, plugin_code, plugin_name, enable, class_name FROM dtb_plugin ORDER BY plugin_id;"
+          run_step "dtb_plugin_hookpoint" docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
+            "SELECT plugin_id, hook_point, callback FROM dtb_plugin_hookpoint ORDER BY plugin_id;"
+          run_step "data/downloads/plugin/" docker compose exec -T ec-cube ls -la /var/www/app/data/downloads/plugin/
+          run_step "data/downloads/plugin/EcAuthLogin2/" docker compose exec -T ec-cube ls -la /var/www/app/data/downloads/plugin/EcAuthLogin2/
+          # apache error.log は存在しないか、redirect で /proc/self/fd/2 になっているケースがあるので
+          # 失敗を許容しつつ tail
+          run_step "apache error.log" docker compose exec -T ec-cube sh -c 'test -f /var/log/apache2/error.log && tail -100 /var/log/apache2/error.log || echo "(no /var/log/apache2/error.log; logs go to docker compose stdout)"'
 
       - name: Upload artifacts on failure
         if: failure()
