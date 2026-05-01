@@ -70,35 +70,51 @@ test.describe.serial('Web インストール経路スモーク', () => {
     await page.goto(`${ADMIN_BASE}ownersstore/`);
     await expect(page.locator('h2', { hasText: 'プラグイン登録' })).toBeVisible();
 
-    // プラグインファイルをセット
-    await page.locator('input[type="file"][name="plugin_file"]').setInputFiles(archive);
+    // 画面に表示されるのは plugin_name（"EcAuth Login (パスキー / ソーシャルログイン)"）であり
+    // plugin_code（"EcAuthLogin2"）は本文には現れないため "EcAuth Login" で検出する。
+    const pluginNameMarker = 'EcAuth Login';
 
-    // <a onclick="install()"> がクリックされると confirm 後 mode=install で submit
-    page.once('dialog', (dialog) => {
-      expect(dialog.message()).toContain('プラグインをインストール');
-      dialog.accept().catch(() => {});
-    });
-    await Promise.all([
-      page.waitForLoadState('networkidle', { timeout: 30000 }),
-      page.locator('a.btn-action:has-text("インストール")').click(),
-    ]);
+    // 前回の試行で既にインストール済みなら（Playwright のリトライ時など）
+    // tar.gz アップロードはスキップする。失敗時に再現性が保たれる。
+    const alreadyInstalled = await page
+      .locator('body')
+      .filter({ hasText: pluginNameMarker })
+      .count();
 
-    // プラグイン一覧に EcAuthLogin2 が現れる
-    await expect(page.locator('body')).toContainText('EcAuthLogin2', { timeout: 15000 });
+    if (alreadyInstalled === 0) {
+      // プラグインファイルをセット
+      await page.locator('input[type="file"][name="plugin_file"]').setInputFiles(archive);
 
-    // 「有効にする」 checkbox（name="enable"）をクリック → confirm → mode=enable で submit
+      // <a onclick="install()"> がクリックされると confirm 後 mode=install で submit
+      page.once('dialog', (dialog) => {
+        expect(dialog.message()).toContain('プラグインをインストール');
+        dialog.accept().catch(() => {});
+      });
+      await Promise.all([
+        page.waitForLoadState('networkidle', { timeout: 30000 }),
+        page.locator('a.btn-action:has-text("インストール")').click(),
+      ]);
+
+      // プラグイン一覧に EcAuth Login が現れる
+      await expect(page.locator('body')).toContainText(pluginNameMarker, { timeout: 15000 });
+    }
+
+    // 有効化処理: name="enable" checkbox があれば有効化、name="disable" なら既に有効状態
     const enableCheckbox = page.locator('input[type="checkbox"][name="enable"]').first();
-    await expect(enableCheckbox).toBeVisible();
-    page.once('dialog', (dialog) => {
-      expect(dialog.message()).toContain('プラグインを有効');
-      dialog.accept().catch(() => {});
-    });
-    await Promise.all([
-      page.waitForLoadState('networkidle', { timeout: 30000 }),
-      enableCheckbox.click(),
-    ]);
+    const isAlreadyEnabled = (await page.locator('input[type="checkbox"][name="disable"]').count()) > 0;
+    if (!isAlreadyEnabled) {
+      await expect(enableCheckbox).toBeVisible();
+      page.once('dialog', (dialog) => {
+        expect(dialog.message()).toContain('プラグインを有効');
+        dialog.accept().catch(() => {});
+      });
+      await Promise.all([
+        page.waitForLoadState('networkidle', { timeout: 30000 }),
+        enableCheckbox.click(),
+      ]);
+    }
 
-    // 有効化後は「プラグイン設定」リンクが現れる
+    // 有効化後（または既に有効）は「プラグイン設定」リンクが現れる
     await expect(page.locator('a:has-text("プラグイン設定")')).toBeVisible({ timeout: 10000 });
   });
 
