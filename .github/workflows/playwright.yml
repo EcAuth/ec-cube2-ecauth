@@ -46,14 +46,27 @@ jobs:
           STAGING_CLIENT_SECRET: op://EcAuth/ecauth-staging-app/client_secret
           STAGING_WEB_APP_SUFFIX: op://EcAuth/ecauth-staging-app/web_app_suffix
 
+      - name: Generate randomized ADMIN_DIR
+        # EC-CUBE 2 の ADMIN_DIR はインストール時に推測困難な値に変更可能（管理画面 URL の秘匿）。
+        # CI ではランダム文字列で起動し、プラグインが ADMIN_DIR を正しく動的解決していることを検証する。
+        # 末尾スラッシュ付きで eccube_install.sh / docker-compose / Playwright に伝搬する。
+        run: |
+          ADMIN_DIR="admin_$(openssl rand -hex 6)/"
+          echo "ADMIN_DIR=${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "ECCUBE_ADMIN_BASE=/${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "[ci] randomized ADMIN_DIR=${ADMIN_DIR}"
+
       - name: Start Docker environment
+        env:
+          ADMIN_DIR: ${{ env.ADMIN_DIR }}
         run: docker compose up -d --build
 
       - name: Wait for EC-CUBE to be ready
+        # ADMIN_DIR がランダム化されているため、admin/ パスではなくルートで readiness を確認する
         run: |
           ready=false
           for i in $(seq 1 60); do
-            if curl -sk https://localhost:8081/admin/ > /dev/null 2>&1; then
+            if curl -sk https://localhost:8081/ > /dev/null 2>&1; then
               echo "EC-CUBE is ready"
               ready=true
               break
@@ -70,6 +83,7 @@ jobs:
         run: npx playwright test tests/admin-passkey-flow.spec.ts --reporter=list
         env:
           ECCUBE_BASE_URL: https://localhost:8081
+          ECCUBE_ADMIN_BASE: ${{ env.ECCUBE_ADMIN_BASE }}
           ECCUBE_ADMIN_LOGIN_ID: admin
           ECCUBE_ADMIN_PASSWORD: password
           ECAUTH_BASE_URL: https://ecauth-staging-${{ env.STAGING_WEB_APP_SUFFIX }}.azurewebsites.net

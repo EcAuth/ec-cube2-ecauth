@@ -39,7 +39,7 @@ services:
       DB_SERVER: postgres
       DB_NAME: eccube_db
       DB_PORT: 5432
-      ADMIN_DIR: admin/
+      ADMIN_DIR: ${ADMIN_DIR:-admin/}
       ADMIN_FORCE_SSL: 'false'
       ADMIN_ALLOW_HOSTS: 'a:0:{}'
       AUTH_MAGIC: ~
