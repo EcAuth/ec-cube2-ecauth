@@ -15,7 +15,7 @@
     },
     "autoload": {
         "classmap": [
-            "data/class"
+            "plugin/EcAuthLogin2/data/class"
         ]
     },
     "require-dev": {

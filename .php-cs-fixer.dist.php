@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $finder = PhpCsFixer\Finder::create()
-    ->in(__DIR__ . '/data/class')
+    ->in(__DIR__ . '/plugin/EcAuthLogin2')
     ->name('*.php');
 
 return (new PhpCsFixer\Config())

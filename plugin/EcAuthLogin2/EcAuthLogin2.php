@@ -229,11 +229,12 @@ class EcAuthLogin2
         if (!is_file($tplFile)) {
             return;
         }
-        $config = $this->loadConfig();
-        if (empty($config['client_id'])) {
-            return;
-        }
 
+        // client_id 未設定時もスクリプトは常に注入する。
+        // Smarty は prefilterTransform をテンプレートコンパイル時にしか実行しないため、
+        // 「設定保存前にコンパイル → 後から設定保存」の場合キャッシュが効いて
+        // 再コンパイルされず、条件付き注入だと永続的にボタンが出なくなる。
+        // 設定未保存時はクリック後の API fetch が失敗してアラート表示する仕掛けで握り潰す。
         $script = file_get_contents($tplFile);
         if ($script === false || $script === '') {
             return;
