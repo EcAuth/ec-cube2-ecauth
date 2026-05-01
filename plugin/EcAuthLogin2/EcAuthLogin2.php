@@ -9,10 +9,13 @@
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *
- * SC_Plugin_Base を継承すると EC-CUBE 2.17+ でエラーになるため
- * マジックメソッドで install/uninstall/enable/disable を実装する。
- *
- * @see https://github.com/EC-CUBE/ec-cube2/issues/551
+ * 設計メモ:
+ * - SC_Plugin_Base を継承すると EC-CUBE 2.17+ で fatal になるため継承しない
+ *   (@see https://github.com/EC-CUBE/ec-cube2/issues/551)
+ * - 一方、Web インストール経路（LC_Page_Admin_OwnersStore::execPlugin）は
+ *   `method_exists($class_name, $exec_func)` で install/uninstall/enable/disable
+ *   の存在を確認する。`method_exists()` は __call/__callStatic のマジック
+ *   メソッドには反応しないため、install 等は **実メソッドとして** static で定義する。
  */
 class EcAuthLogin2
 {
@@ -71,32 +74,35 @@ class EcAuthLogin2
         $this->arrSelfInfo = $arrSelfInfo;
     }
 
-    public static function __callStatic($name, $arguments)
+    /**
+     * EC-CUBE 2 標準のプラグインライフサイクル（Web インストール経路で
+     * `method_exists` 経由で検出される）の実メソッド定義。
+     * 第二引数 $installer は SC_Plugin_Installer もしくは未指定（CLI 経由）。
+     *
+     * @param array $plugin dtb_plugin の行
+     */
+    public static function install($plugin, $installer = null)
     {
-        switch ($name) {
-            case 'install':
-            case 'uninstall':
-            case 'enable':
-            case 'disable':
-                $instance = new self($arguments[0]);
-
-                return call_user_func(array($instance, 'do' . ucfirst($name)), $arguments[0]);
-        }
-
-        return null;
+        $instance = new self($plugin);
+        $instance->doInstall($plugin);
     }
 
-    public function __call($name, $arguments)
+    public static function uninstall($plugin, $installer = null)
     {
-        switch ($name) {
-            case 'install':
-            case 'uninstall':
-            case 'enable':
-            case 'disable':
-                return call_user_func(array($this, 'do' . ucfirst($name)), $arguments[0]);
-        }
+        $instance = new self($plugin);
+        $instance->doUninstall($plugin);
+    }
 
-        return null;
+    public static function enable($plugin, $installer = null)
+    {
+        $instance = new self($plugin);
+        $instance->doEnable($plugin);
+    }
+
+    public static function disable($plugin, $installer = null)
+    {
+        $instance = new self($plugin);
+        $instance->doDisable($plugin);
     }
 
     /**

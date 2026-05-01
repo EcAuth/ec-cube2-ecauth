@@ -81,14 +81,12 @@ if (empty($plugin)) {
     }, plugin_info::$HOOK_POINTS);
 
     require_once DATA_REALDIR . 'downloads/plugin/' . PLUGIN_CODE . '/EcAuthLogin2.php';
-    $objPlugin = new EcAuthLogin2($arrPlugin);
-    $objPlugin->install($arrPlugin);
+    EcAuthLogin2::install($arrPlugin);
     fwrite(STDOUT, "Executed EcAuthLogin2::install()\n");
 } else {
     fwrite(STDOUT, "Plugin already registered; running install() to ensure files are in place\n");
     require_once DATA_REALDIR . 'downloads/plugin/' . PLUGIN_CODE . '/EcAuthLogin2.php';
-    $objPlugin = new EcAuthLogin2((array) $plugin);
-    $objPlugin->install((array) $plugin);
+    EcAuthLogin2::install((array) $plugin);
 }
 
 // 環境変数から設定を投入（開発環境用）
