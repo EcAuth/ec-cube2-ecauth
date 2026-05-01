@@ -357,6 +357,16 @@ class EcAuthLogin2
         );
     }
 
+    /**
+     * fileMap に従いファイルを配置する。
+     *
+     * 重要: ソース未検出・mkdir 失敗・copy 失敗はいずれも RuntimeException を
+     * 送出し、install を失敗扱いにする。`error_log` だけで握りつぶすと
+     * 「インストール成功表示だが実行時にクラス未発見/404」というワースト
+     * ケースになるため、明示的に abort する。
+     *
+     * @throws RuntimeException
+     */
     protected function copyPluginFiles()
     {
         $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
@@ -365,15 +375,20 @@ class EcAuthLogin2
             $src = $base . $relativeSrc;
             $dest = $this->expandDestSpec($destSpec);
             if (!is_file($src)) {
-                error_log('[EcAuthLogin2] Source not found: ' . $src);
-                continue;
+                $message = '[EcAuthLogin2] Source file missing: ' . $src;
+                error_log($message);
+                throw new RuntimeException($message);
             }
             $destDir = dirname($dest);
-            if (!is_dir($destDir)) {
-                @mkdir($destDir, 0755, true);
+            if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
+                $message = '[EcAuthLogin2] mkdir failed: ' . $destDir;
+                error_log($message);
+                throw new RuntimeException($message);
             }
             if (!copy($src, $dest)) {
-                error_log('[EcAuthLogin2] Copy failed: ' . $src . ' -> ' . $dest);
+                $message = '[EcAuthLogin2] Copy failed: ' . $src . ' -> ' . $dest;
+                error_log($message);
+                throw new RuntimeException($message);
             }
         }
     }
