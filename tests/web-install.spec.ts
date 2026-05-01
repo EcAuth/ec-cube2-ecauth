@@ -119,14 +119,12 @@ test.describe.serial('Web インストール経路スモーク', () => {
   });
 
   test('スモーク: プラグイン設定画面が開く', async ({ page }) => {
-    // load_plugin_config.php?plugin_id=... 経由で設定画面に到達
-    // plugin_id は SERIAL なので新規環境では 1 だが、デフォルト値を埋め込み済みプラグインがある場合に備え
-    // dtb_plugin から動的解決する代わりに、画面に表示される「プラグイン設定」リンクから辿る
-    await page.goto(`${ADMIN_BASE}ownersstore/`);
-    await Promise.all([
-      page.waitForLoadState('networkidle', { timeout: 15000 }),
-      page.locator('a:has-text("プラグイン設定")').first().click(),
-    ]);
+    // EC-CUBE 2 の「プラグイン設定」リンクは eccube.openWindow() で popup を開く
+    // ため、元の page を click() しても遷移しない。直接 load_plugin_config.php に
+    // goto して設定画面の到達性を検証する。
+    // plugin_id は dtb_plugin の値（admin-passkey-flow.spec.ts と同じデフォルト 10000）。
+    const pluginId = process.env.ECCUBE_PLUGIN_ID || '10000';
+    await page.goto(`${ADMIN_BASE}load_plugin_config.php?plugin_id=${pluginId}`);
 
     // 設定画面のタイトルとフォーム要素が表示される = LC_Page クラスのオートロード成功
     // + Smarty テンプレートのコピー成功 + dtb_plugin 登録成功 を間接的に保証
