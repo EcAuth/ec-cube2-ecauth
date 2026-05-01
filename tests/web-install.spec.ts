@@ -99,10 +99,15 @@ test.describe.serial('Web インストール経路スモーク', () => {
       await expect(page.locator('body')).toContainText(pluginNameMarker, { timeout: 15000 });
     }
 
+    // 共有環境で他プラグインが並んでいるケースでも誤って別行を操作しないよう、
+    // EcAuthLogin2 を含む <tr> にスコープしてから checkbox / リンクを参照する
+    const pluginRow = page.locator('tr').filter({ hasText: pluginNameMarker }).first();
+    await expect(pluginRow).toBeVisible();
+
     // 有効化処理: name="enable" checkbox があれば有効化、name="disable" なら既に有効状態
-    const enableCheckbox = page.locator('input[type="checkbox"][name="enable"]').first();
-    const isAlreadyEnabled = (await page.locator('input[type="checkbox"][name="disable"]').count()) > 0;
+    const isAlreadyEnabled = (await pluginRow.locator('input[type="checkbox"][name="disable"]').count()) > 0;
     if (!isAlreadyEnabled) {
+      const enableCheckbox = pluginRow.locator('input[type="checkbox"][name="enable"]');
       await expect(enableCheckbox).toBeVisible();
       page.once('dialog', (dialog) => {
         expect(dialog.message()).toContain('プラグインを有効');
@@ -115,7 +120,11 @@ test.describe.serial('Web インストール経路スモーク', () => {
     }
 
     // 有効化後（または既に有効）は「プラグイン設定」リンクが現れる
-    await expect(page.locator('a:has-text("プラグイン設定")')).toBeVisible({ timeout: 10000 });
+    // 上で取得した pluginRow は enable submit 後にページ再描画されているので
+    // 再評価し直して、当該行の中だけで設定リンクを検証する
+    await expect(
+      page.locator('tr').filter({ hasText: pluginNameMarker }).first().locator('a:has-text("プラグイン設定")'),
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('スモーク: プラグイン設定画面が開く', async ({ page }) => {
