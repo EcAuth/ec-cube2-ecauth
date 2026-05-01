@@ -1,0 +1,124 @@
+name: Playwright E2E (Staging)
+
+# ec-cube2-ecauth プラグインの B2B パスキー登録〜ログインフローを
+# staging EcAuth テナント (ecauth-staging-app) に対して end-to-end で検証する。
+#
+# - 1Password から STAGING_CLIENT_ID / STAGING_CLIENT_SECRET / STAGING_WEB_APP_SUFFIX を読み込み
+# - docker compose で EC-CUBE 起動 (プラグイン自動インストール状態)
+# - Playwright で管理者ログイン → 設定保存 → パスキー登録 → ログアウト → パスキーログイン
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: E2E Tests (staging)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Load secrets from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          STAGING_CLIENT_ID: op://EcAuth/ecauth-staging-app/client_id
+          STAGING_CLIENT_SECRET: op://EcAuth/ecauth-staging-app/client_secret
+          STAGING_WEB_APP_SUFFIX: op://EcAuth/ecauth-staging-app/web_app_suffix
+
+      - name: Generate randomized ADMIN_DIR
+        # EC-CUBE 2 の ADMIN_DIR はインストール時に推測困難な値に変更可能（管理画面 URL の秘匿）。
+        # CI ではランダム文字列で起動し、プラグインが ADMIN_DIR を正しく動的解決していることを検証する。
+        # 末尾スラッシュ付きで eccube_install.sh / docker-compose / Playwright に伝搬する。
+        run: |
+          ADMIN_DIR="admin_$(openssl rand -hex 6)/"
+          echo "ADMIN_DIR=${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "ECCUBE_ADMIN_BASE=/${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "[ci] randomized ADMIN_DIR=${ADMIN_DIR}"
+
+      - name: Start Docker environment
+        env:
+          ADMIN_DIR: ${{ env.ADMIN_DIR }}
+        run: docker compose up -d --build
+
+      - name: Wait for EC-CUBE to be ready
+        # ADMIN_DIR がランダム化されているため、admin/ パスではなくルートで readiness を確認する
+        run: |
+          ready=false
+          for i in $(seq 1 60); do
+            if curl -sk https://localhost:8081/ > /dev/null 2>&1; then
+              echo "EC-CUBE is ready"
+              ready=true
+              break
+            fi
+            echo "Waiting for EC-CUBE... ($i/60)"
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            echo "EC-CUBE did not become ready in time" >&2
+            exit 1
+          fi
+
+      - name: Run Playwright passkey flow
+        run: npx playwright test tests/admin-passkey-flow.spec.ts --reporter=list
+        env:
+          ECCUBE_BASE_URL: https://localhost:8081
+          ECCUBE_ADMIN_BASE: ${{ env.ECCUBE_ADMIN_BASE }}
+          ECCUBE_ADMIN_LOGIN_ID: admin
+          ECCUBE_ADMIN_PASSWORD: password
+          ECAUTH_BASE_URL: https://ecauth-staging-${{ env.STAGING_WEB_APP_SUFFIX }}.azurewebsites.net
+          CLIENT_ID: ${{ env.STAGING_CLIENT_ID }}
+          CLIENT_SECRET: ${{ env.STAGING_CLIENT_SECRET }}
+          RP_ID: localhost
+
+      - name: Collect EC-CUBE logs on failure
+        if: failure()
+        run: |
+          mkdir -p ec-cube-logs
+          docker compose logs --no-color ec-cube > ec-cube-logs/ec-cube-stdout.log 2>&1 || true
+          docker compose logs --no-color postgres > ec-cube-logs/postgres-stdout.log 2>&1 || true
+          docker compose exec -T ec-cube cat /var/www/app/data/logs/error.log > ec-cube-logs/ec-cube-error.log 2>/dev/null || true
+          docker compose exec -T ec-cube cat /var/www/app/data/logs/admin.log > ec-cube-logs/ec-cube-admin.log 2>/dev/null || true
+          docker compose exec -T ec-cube cat /var/www/app/data/logs/site.log > ec-cube-logs/ec-cube-site.log 2>/dev/null || true
+
+      - name: Dump dtb_member on failure
+        if: failure()
+        run: |
+          echo "=== dtb_member (member_id, login_id, ecauth_subject) ==="
+          docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
+            "SELECT member_id, login_id, ecauth_subject FROM dtb_member ORDER BY member_id;" || true
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-staging
+          path: |
+            test-results/
+            playwright-report/
+            ec-cube-logs/
+          retention-days: 7
+
+      - name: Stop Docker environment
+        if: always()
+        run: docker compose down -v

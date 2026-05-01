@@ -1,14 +1,25 @@
 parameters:
     level: 5
+    treatPhpDocTypesAsCertain: false
     paths:
-        - data/class
+        - plugin/EcAuthLogin2
     excludePaths:
         - vendor
     scanDirectories:
         - vendor/ec-cube/ec-cube2/data/class
-        - vendor/nanasess/ec-cube2-class-extends-stubs/stubs
+        - vendor/nanasess/ec-cube2-class-extends-stubs/data/class_extends
     bootstrapFiles:
         - vendor/autoload.php
+        - phpstan-bootstrap.php
+    # EC-CUBE 2 の Page クラスは LC_Page_*, SC_Helper_*, SC_Utils_* 等の
+    # 動的プロパティ・メソッドに依存しており、静的解析で全て型解決するのは
+    # 現実的ではない。ここでは「未知のクラス/未知のメソッド/未知のプロパティ」
+    # 系のエラーをまとめて抑制する。
     ignoreErrors:
-        - '#Call to an undefined method SC_Query::#'
-        - '#Access to an undefined property SC_#'
+        - '#Call to (an undefined|static) method (SC_|GC_|LC_)#'
+        - '#Call to method [a-zA-Z]+\(\) on an unknown class (SC_|GC_|LC_)#'
+        - '#Call to static method [a-zA-Z]+\(\) on an unknown class (SC_|GC_|LC_)#'
+        - '#Instantiated class (SC_|GC_|LC_)#'
+        - '#Access to an undefined property (SC_|GC_|LC_)#'
+        - '#Call to an undefined method EcAuthLogin2::(install|uninstall|enable|disable)\(\)#'
+    reportUnmatchedIgnoredErrors: false
