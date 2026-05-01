@@ -77,6 +77,11 @@ class SC_Helper_EcAuthLogin2
 
     // ========================================================================
     // B2C ソーシャルログイン
+    //
+    // 注意: 本セクション (顧客向け OIDC フェデレーションログイン) は後続リリース
+    // で正式提供予定であり、現時点では実運用での使用を想定していない。コードは
+    // 実装済みでテスト目的では動作するが、本番環境向けの最終調整 (UI 文言・
+    // 顧客プロビジョニング仕様・メール通知設計等) は次のフェーズで行う。
     // ========================================================================
 
     /**
@@ -269,12 +274,26 @@ class SC_Helper_EcAuthLogin2
             $arrCustomer['name02'] = 'ユーザー';
         }
         if (empty($arrCustomer['email'])) {
-            $arrCustomer['email'] = 'ecauth_' . $customerId . '@example.com';
+            // 外部 IdP から email が来ない場合のフォールバック。
+            // RFC 6761 で DNS 解決保証されない `.invalid` TLD を使い、
+            // 誤って実メール送信したときに必ず NXDOMAIN で失敗するようにする
+            // (本来この経路に流れるユーザーには別途 email 入力 UI を提供する想定)。
+            $arrCustomer['email'] = 'ecauth_' . $customerId . '@example.invalid';
         }
 
         try {
             $objQuery->insert('dtb_customer', $arrCustomer);
         } catch (Exception $e) {
+            // PII を漏らさないよう customer_id と例外型・メッセージのみログ出力する。
+            // dtb_customer.email の UNIQUE 制約違反、DB 接続エラー、スキーマ不一致 等の
+            // 切り分けに使う。
+            GC_Utils_Ex::gfPrintLog(
+                '[EcAuthLogin2] findOrCreateCustomer: dtb_customer insert failed: '
+                . 'customer_id=' . $customerId
+                . ' exception=' . get_class($e)
+                . ' message=' . $e->getMessage()
+            );
+
             return false;
         }
 

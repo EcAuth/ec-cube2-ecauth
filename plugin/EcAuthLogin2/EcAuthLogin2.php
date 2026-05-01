@@ -191,6 +191,11 @@ class EcAuthLogin2
 
     /**
      * B2C ログインボタンを挿入する（既存ロジック）
+     *
+     * 注意: B2C OIDC フェデレーションは後続リリースで正式提供予定であり、本機能は
+     * 現段階では実運用での使用を想定していない。`client_id` が dtb_plugin に
+     * 保存されていれば mypage/login.tpl 等にボタンが描画されるが、現フェーズでは
+     * 設定保存しない運用とすることでボタンを表示させない (動作確認用にコードは残す)。
      */
     protected function insertB2CLoginButton(&$source, $filename)
     {

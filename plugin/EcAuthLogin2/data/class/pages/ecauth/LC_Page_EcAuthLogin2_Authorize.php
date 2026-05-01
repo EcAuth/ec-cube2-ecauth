@@ -16,6 +16,11 @@ require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
 /**
  * B2C ソーシャルログインの認可リクエストページ。
  * state / code_verifier をセッションに保存し、EcAuth の認可エンドポイントへリダイレクトする。
+ *
+ * 注意: B2C OIDC フェデレーションは後続リリースで正式提供予定であり、本ページは
+ * 現段階では実運用での使用を想定していない (テンプレ側のログインボタンも
+ * 未挿入)。コード自体は動作するが、UI 文言・顧客プロビジョニング仕様等は
+ * 次フェーズで最終調整する。
  */
 class LC_Page_EcAuthLogin2_Authorize extends LC_Page
 {

@@ -138,6 +138,11 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
 
     /**
      * B2C ソーシャルログインのコールバック。
+     *
+     * 注意: B2C OIDC フェデレーションは後続リリースで正式提供予定。現段階では
+     * `ecauth_state` セッションが立っていなければこの分岐に流れないため
+     * 実運用では呼ばれない。コード自体は動作するが、エラー UI・JIT プロビジョニング
+     * 仕様の最終確定は次フェーズで行う。
      */
     protected function handleB2CCallback(SC_Helper_EcAuthLogin2 $objHelper, $code)
     {
