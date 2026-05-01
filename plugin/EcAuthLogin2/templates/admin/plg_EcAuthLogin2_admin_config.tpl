@@ -32,7 +32,7 @@
                 </td>
             </tr>
             <tr>
-                <th>Client Secret <span style="color: #e60012;">*</span></th>
+                <th>Client Secret <!--{if !$has_client_secret}--><span style="color: #e60012;">*</span><!--{/if}--></th>
                 <td>
                     <input type="password" name="client_secret" value="" size="60" maxlength="<!--{$smarty.const.STEXT_LEN}-->"
                         placeholder="<!--{if $has_client_secret}-->●●●●●●●●●●●●●●●●（保存済み。変更時のみ入力）<!--{/if}-->" autocomplete="new-password" />
