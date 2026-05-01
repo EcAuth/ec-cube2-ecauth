@@ -52,6 +52,11 @@ services:
       ECAUTH_USERINFO_ENDPOINT: ${ECAUTH_USERINFO_ENDPOINT:-}
       ECAUTH_EXTERNAL_USERINFO_ENDPOINT: ${ECAUTH_EXTERNAL_USERINFO_ENDPOINT:-}
       ECAUTH_PROVIDER_NAME: ${ECAUTH_PROVIDER_NAME:-federate-oauth2}
+      # CI 用フラグ（docker-entrypoint.sh が読む）
+      # SKIP_PLUGIN_INSTALL=true で entrypoint のプラグイン CLI 自動インストールを抑止し、
+      # Web インストール経路のテスト（e2e-web-install.yml）を可能にする
+      SKIP_PLUGIN_INSTALL: ${SKIP_PLUGIN_INSTALL:-}
+      ECCUBE_INSTALL_SKIP: ${ECCUBE_INSTALL_SKIP:-}
     volumes:
       - "vendor:/var/www/app/data/vendor"
     networks:
