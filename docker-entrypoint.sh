@@ -48,6 +48,17 @@ if [ ! -f "${ECCUBE_DIR}/data/config/config.php" ] && [ "${ECCUBE_INSTALL_SKIP}"
     export DBSERVER="${DB_HOST}"
     export DBPORT="${DB_PORT_LOCAL}"
     ./eccube_install.sh pgsql
+
+    # eccube_install.sh は config.php に define('ADMIN_DIR', ...) を書くのみで、
+    # html/admin/ ディレクトリ自体のリネームは行わない（Web インストーラ専用）。
+    # ADMIN_DIR を admin/ 以外に変更した場合は物理ディレクトリも合わせる必要がある。
+    ADMIN_DIR_NAME="${ADMIN_DIR%/}"
+    if [ -n "${ADMIN_DIR_NAME}" ] && [ "${ADMIN_DIR_NAME}" != "admin" ]; then
+        if [ -d "${ECCUBE_DIR}/html/admin" ] && [ ! -d "${ECCUBE_DIR}/html/${ADMIN_DIR_NAME}" ]; then
+            echo "[ecauth-entrypoint] Renaming html/admin -> html/${ADMIN_DIR_NAME} (ADMIN_DIR=${ADMIN_DIR})"
+            mv "${ECCUBE_DIR}/html/admin" "${ECCUBE_DIR}/html/${ADMIN_DIR_NAME}"
+        fi
+    fi
 fi
 
 # ----- プラグイン自動インストール（開発環境専用） ----------------------------
