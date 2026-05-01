@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: process.env.ECCUBE_BASE_URL || 'http://localhost:8080',
+    baseURL: process.env.ECCUBE_BASE_URL || 'https://localhost:24430',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',

@@ -1,32 +1,20 @@
-# EC-CUBE 2 公式イメージをベースに使用
+# EC-CUBE 2 公式イメージをベース
+# プラグインソースは「アーカイブが展開されるのと同じ場所」にだけ置き、
+# その他の配置はメインクラスの install() に委譲する。
 FROM ghcr.io/ec-cube/ec-cube2-php:7.4-apache-eccube-2.25.0
 
-# プラグインファイルをコピー（公式イメージのパスは /var/www/app）
+# プラグイン本体を data/downloads/plugin/<PLUGIN_CODE>/ に展開した状態で配置する。
+# Web インストール経路で tar.gz を展開した場合と全く同じパスに配置することで、
+# install() が両経路で同一の挙動になるようにする。
 COPY plugin/EcAuthLogin2 /var/www/app/data/downloads/plugin/EcAuthLogin2/
-COPY data/class/helper/SC_Helper_EcAuth.php /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class/helper/
-COPY data/class/pages /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class/pages/
-COPY data/class_extends /var/www/app/data/downloads/plugin/EcAuthLogin2/data/class_extends/
-COPY html/ecauth /var/www/app/data/downloads/plugin/EcAuthLogin2/html/ecauth/
-COPY data/Smarty/templates /var/www/app/data/downloads/plugin/EcAuthLogin2/data/Smarty/templates/
 
-# EC-CUBE が使用するディレクトリにもファイルをコピー
-# SC_Helper_EcAuth.php
-COPY data/class/helper/SC_Helper_EcAuth.php /var/www/app/data/class/helper/
-
-# callback.php と関連ページクラス
-COPY html/ecauth /var/www/app/html/ecauth/
-COPY data/class/pages/ecauth /var/www/app/data/class/pages/ecauth/
-COPY data/class_extends/page_extends/ecauth /var/www/app/data/class_extends/page_extends/ecauth/
-
-# プラグインインストールスクリプトをコピー
-COPY install-plugin.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/install-plugin.sh
-
-# 権限設定
-RUN chown -R www-data:www-data /var/www/app/data/downloads/plugin/EcAuthLogin2 \
-    && chown -R www-data:www-data /var/www/app/data/class/helper/SC_Helper_EcAuth.php \
-    && chown -R www-data:www-data /var/www/app/html/ecauth/ \
-    && chown -R www-data:www-data /var/www/app/data/class/pages/ecauth/ \
-    && chown -R www-data:www-data /var/www/app/data/class_extends/page_extends/ecauth/
+# 開発環境用の自動インストール entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/ecauth-docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/ecauth-docker-entrypoint.sh \
+ && chown -R www-data:www-data /var/www/app/data/downloads/plugin/EcAuthLogin2
 
 WORKDIR /var/www/app
+
+# ベースイメージの entrypoint は /wait-for-pgsql.sh。
+# 我々のスクリプトはその後段で実行される必要があるため、
+# docker-compose.yml 側で entrypoint を上書きする。

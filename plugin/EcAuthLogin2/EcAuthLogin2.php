@@ -1,125 +1,130 @@
 <?php
-/**
+/*
  * EcAuthLogin2 プラグインメインクラス
+ * Copyright (C) 2026 EcAuth
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
  * SC_Plugin_Base を継承すると EC-CUBE 2.17+ でエラーになるため
- * マジックメソッドを使用して実装
- * @see https://github.com/EC-CUBE/ec-cube2/issues/551
+ * マジックメソッドで install/uninstall/enable/disable を実装する。
  *
- * @package EcAuthLogin2
- * @version 1.0.0
+ * @see https://github.com/EC-CUBE/ec-cube2/issues/551
  */
 class EcAuthLogin2
 {
     /** @var array プラグイン情報 */
     protected $arrSelfInfo;
 
-    /**
-     * コンストラクタ
-     *
-     * @param array $arrSelfInfo プラグイン情報
-     */
+    /** @var array<string,string> [プラグイン内パス => コピー先絶対パス] */
+    protected static $fileMap = array(
+        // 共通ヘルパー
+        'data/class/helper/SC_Helper_EcAuthLogin2.php'
+            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2.php',
+
+        // B2C ソーシャルログイン用ページクラス
+        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php'
+            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php',
+        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Callback.php'
+            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Callback.php',
+
+        // B2B 管理画面ページクラス
+        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php'
+            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php',
+        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php'
+            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php',
+        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php'
+            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php',
+        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php'
+            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php',
+
+        // B2C ソーシャルログイン用エントリポイント
+        'html/ecauth/authorize.php' => 'HTML_REALDIR:ecauth/authorize.php',
+        'html/ecauth/callback.php' => 'HTML_REALDIR:ecauth/callback.php',
+
+        // B2B パスキー認証 API（フロント側、認証不要）
+        'html/ecauth/passkey/authenticate-options.php'
+            => 'HTML_REALDIR:ecauth/passkey/authenticate-options.php',
+        'html/ecauth/passkey/authenticate-verify.php'
+            => 'HTML_REALDIR:ecauth/passkey/authenticate-verify.php',
+
+        // B2B パスキー登録 API（管理画面、管理者認証必須）
+        'html/admin/ecauth/passkey.php' => 'ADMIN_HTML_REALDIR:ecauth/passkey.php',
+        'html/admin/ecauth/api/verify-password.php'
+            => 'ADMIN_HTML_REALDIR:ecauth/api/verify-password.php',
+        'html/admin/ecauth/api/register-options.php'
+            => 'ADMIN_HTML_REALDIR:ecauth/api/register-options.php',
+        'html/admin/ecauth/api/register-verify.php'
+            => 'ADMIN_HTML_REALDIR:ecauth/api/register-verify.php',
+
+        // 管理画面プラグイン管理「設定」リンクは
+        // PLUGIN_UPLOAD_REALDIR/<PLUGIN_CODE>/config.php （= プラグインルートの config.php）
+        // を直接 require_once する仕様のため、ファイルコピーは不要。
+        // tar.gz に config.php が含まれていれば設定リンクが自動的に有効になる。
+    );
+
     public function __construct(array $arrSelfInfo)
     {
         $this->arrSelfInfo = $arrSelfInfo;
     }
 
-    /**
-     * 静的メソッド呼び出しのマジックメソッド
-     *
-     * @param string $name メソッド名
-     * @param array $arguments 引数
-     * @return mixed
-     */
     public static function __callStatic($name, $arguments)
     {
         switch ($name) {
             case 'install':
-                // 静的呼び出しの場合
-                $instance = new self($arguments[0]);
-                return $instance->doInstall($arguments[0]);
             case 'uninstall':
-                $instance = new self($arguments[0]);
-                return $instance->doUninstall($arguments[0]);
             case 'enable':
-                $instance = new self($arguments[0]);
-                return $instance->doEnable($arguments[0]);
             case 'disable':
                 $instance = new self($arguments[0]);
-                return $instance->doDisable($arguments[0]);
+                return call_user_func(array($instance, 'do' . ucfirst($name)), $arguments[0]);
         }
     }
 
-    /**
-     * インスタンスメソッド呼び出しのマジックメソッド
-     *
-     * @param string $name メソッド名
-     * @param array $arguments 引数
-     * @return mixed
-     */
     public function __call($name, $arguments)
     {
         switch ($name) {
             case 'install':
-                return $this->doInstall($arguments[0]);
             case 'uninstall':
-                return $this->doUninstall($arguments[0]);
             case 'enable':
-                return $this->doEnable($arguments[0]);
             case 'disable':
-                return $this->doDisable($arguments[0]);
+                return call_user_func(array($this, 'do' . ucfirst($name)), $arguments[0]);
         }
     }
 
     /**
-     * インストール処理
-     *
-     * @param array $arrPlugin プラグイン情報
-     * @return void
+     * インストール処理。冪等。
+     * - dtb_customer / dtb_member に ecauth_subject カラムを追加
+     * - dtb_plugin.free_field1 が空なら空 JSON を初期投入
+     * - PLUGIN_UPLOAD_REALDIR/EcAuthLogin2/ 配下のファイルを EC-CUBE のディレクトリツリーへコピー
      */
     protected function doInstall($arrPlugin)
     {
-        // dtb_customer に ecauth_subject カラムを追加
-        $this->addEcAuthSubjectColumn();
-
-        // 必要なファイルをコピー
-        $this->copyFiles();
+        $this->ensureEcAuthSubjectColumn('dtb_customer');
+        $this->ensureEcAuthSubjectColumn('dtb_member', true);
+        $this->initializeDefaultConfig();
+        $this->copyPluginFiles();
     }
 
     /**
-     * アンインストール処理
-     *
-     * @param array $arrPlugin プラグイン情報
-     * @return void
+     * アンインストール処理。
+     * - 配置したファイルを削除する
+     * - DB のカラムは残す（データ保持のため）
      */
     protected function doUninstall($arrPlugin)
     {
-        // コピーしたファイルを削除
-        $this->removeFiles();
-
-        // カラムは残す（データ保持のため）
+        $this->removePluginFiles();
     }
 
-    /**
-     * 有効化処理
-     *
-     * @param array $arrPlugin プラグイン情報
-     * @return void
-     */
     protected function doEnable($arrPlugin)
     {
-        // 特に処理なし
+        // 必要時のみキャッシュクリア等
     }
 
-    /**
-     * 無効化処理
-     *
-     * @param array $arrPlugin プラグイン情報
-     * @return void
-     */
     protected function doDisable($arrPlugin)
     {
-        // 特に処理なし
+        // 必要時のみキャッシュクリア等
     }
 
     /**
@@ -127,295 +132,243 @@ class EcAuthLogin2
      *
      * @param SC_Helper_Plugin $objHelperPlugin
      * @param int $priority
-     * @return void
      */
     public function register(SC_Helper_Plugin $objHelperPlugin, $priority)
     {
-        if (isset($this->arrSelfInfo['plugin_hook_point'])) {
-            $arrHookPoints = $this->arrSelfInfo['plugin_hook_point'];
-            foreach ($arrHookPoints as $hook_point) {
-                if (isset($hook_point['callback'])) {
-                    $hook_point_name = $hook_point['hook_point'];
-                    $callback_name = $hook_point['callback'];
-                    $objHelperPlugin->addAction($hook_point_name, array($this, $callback_name), $priority);
-                }
+        if (!isset($this->arrSelfInfo['plugin_hook_point'])) {
+            return;
+        }
+        foreach ($this->arrSelfInfo['plugin_hook_point'] as $hookPoint) {
+            if (!isset($hookPoint['callback'])) {
+                continue;
             }
+            $objHelperPlugin->addAction(
+                $hookPoint['hook_point'],
+                array($this, $hookPoint['callback']),
+                $priority
+            );
         }
     }
 
-    /**
-     * プラグイン情報を取得
-     *
-     * @return array
-     */
     public function getPluginInfo()
     {
         return $this->arrSelfInfo;
     }
 
+    // ========================================================================
+    // フックポイント
+    // ========================================================================
+
     /**
-     * プレフィルタコールバック関数
+     * Smarty テンプレートのプレフィルタ。
+     * - フロントの mypage/login.tpl と shopping/index.tpl に B2C ログインボタンを差し込む
+     * - 管理画面の admin/login.tpl にパスキーログインスクリプトを差し込む（Phase B-3 で実装）
      *
-     * @param string &$source テンプレートのHTMLソース
-     * @param LC_Page_Ex $objPage ページオブジェクト
-     * @param string $filename テンプレートのファイル名
-     * @return void
+     * @param string $source テンプレートソース
+     * @param LC_Page_Ex $objPage
+     * @param string $filename
      */
     public function prefilterTransform(&$source, LC_Page_Ex $objPage, $filename)
     {
-        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] prefilterTransform called: filename=' . $filename);
+        if ($filename === 'mypage/login.tpl' || $filename === 'shopping/index.tpl') {
+            $this->insertB2CLoginButton($source, $filename);
 
-        // マイページログインページ
-        if ($filename === 'mypage/login.tpl') {
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Inserting login button for mypage');
-            $this->insertLoginButton($source, 'mypage');
-        }
-
-        // 購入手続きページ（ログインフォーム）
-        if ($filename === 'shopping/index.tpl') {
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Inserting login button for shopping');
-            $this->insertLoginButton($source, 'shopping');
-        }
-    }
-
-    /**
-     * ログインボタンを挿入
-     *
-     * @param string &$source テンプレートソース
-     * @param string $context コンテキスト（mypage/shopping）
-     * @return void
-     */
-    protected function insertLoginButton(&$source, $context)
-    {
-        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] insertLoginButton called: context=' . $context);
-
-        $objHelper = new SC_Helper_EcAuth();
-        $config = $objHelper->getConfig();
-
-        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Config: ' . print_r($config, true));
-
-        // 設定がない場合は何もしない
-        if (empty($config['client_id'])) {
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] client_id is empty, skipping');
             return;
         }
 
-        // ボタン生成
-        $button = $this->generateLoginButton($context);
-        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Generated button HTML: ' . substr($button, 0, 100) . '...');
+        // EC-CUBE 2 の admin ログイン画面のテンプレートファイル名は "login.tpl"
+        // (admin/ プレフィックスは付かない)。フロントの mypage/login.tpl とは
+        // 上のブロックで分岐済みなので、ここに来た login.tpl は admin と扱う。
+        if ($filename === 'login.tpl') {
+            $this->insertAdminPasskeyScript($source);
 
-        // 挿入位置を探す
-        // ログインボタン（type="image" または type="submit"）の後に挿入
-        // EC-CUBE 2.25 デフォルトテンプレートは type="image" を使用
-        // 属性の順序に依存しない正規表現に修正
-        $pattern = '/(<input[^>]*alt=["\']ログイン["\'][^>]*\/>)/iu';
-
-        GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Searching for pattern in source (length=' . strlen($source) . ')');
-
-        if (preg_match($pattern, $source, $matches)) {
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Pattern matched: ' . $matches[0]);
-            $source = preg_replace(
-                $pattern,
-                '$1' . "\n" . $button,
-                $source,
-                1  // 最初の1つだけ置換
-            );
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Button inserted successfully');
-        } else {
-            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Pattern not matched, trying fallback');
-            // フォールバック: btn_area の最初の </ul> の後に挿入
-            $fallbackPattern = '/(<div class="btn_area">.*?<\/ul>)/is';
-            if (preg_match($fallbackPattern, $source, $matches)) {
-                GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Fallback pattern matched');
-                $source = preg_replace(
-                    $fallbackPattern,
-                    '$1' . "\n" . '<li>' . $button . '</li>',
-                    $source,
-                    1
-                );
-            } else {
-                GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] Fallback pattern also not matched');
-            }
+            return;
         }
     }
 
     /**
-     * ログインボタンのHTMLを生成
-     *
-     * @param string $context コンテキスト
-     * @return string ボタンHTML
+     * B2C ログインボタンを挿入する（既存ロジック）
      */
-    protected function generateLoginButton($context)
+    protected function insertB2CLoginButton(&$source, $filename)
     {
-        $objHelper = new SC_Helper_EcAuth();
-        $config = $objHelper->getConfig();
+        $config = $this->loadConfig();
+        if (empty($config['client_id'])) {
+            return;
+        }
 
         $providerName = !empty($config['provider_name']) ? $config['provider_name'] : 'EcAuth';
-
-        // 認可リクエストエンドポイントへのリンク
-        // state/code_verifier はこのエンドポイントで生成・保存される
         $authorizeUrl = HTTPS_URL . 'ecauth/authorize.php';
 
-        $html = <<<HTML
-<div class="ecauth-login-button" style="margin-top: 15px; text-align: center;">
-    <a href="{$authorizeUrl}" class="btn btn-primary" style="background-color: #4285f4; border-color: #4285f4; color: #fff; padding: 10px 20px; text-decoration: none; display: inline-block; border-radius: 4px;">
-        {$providerName} でログイン
-    </a>
-</div>
-HTML;
+        $providerNameHtml = htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8');
+        $button = '<div class="ecauth-login-button" style="margin-top: 15px; text-align: center;">'
+            . '<a href="' . htmlspecialchars($authorizeUrl, ENT_QUOTES, 'UTF-8') . '"'
+            . ' class="btn btn-primary" style="background-color: #4285f4; border-color: #4285f4; color: #fff; padding: 10px 20px; text-decoration: none; display: inline-block; border-radius: 4px;">'
+            . $providerNameHtml . ' でログイン'
+            . '</a></div>';
 
-        return $html;
+        $pattern = '/(<input[^>]*alt=["\']ログイン["\'][^>]*\/>)/iu';
+        if (preg_match($pattern, $source)) {
+            $source = preg_replace($pattern, '$1' . "\n" . $button, $source, 1);
+
+            return;
+        }
+
+        $fallbackPattern = '/(<div class="btn_area">.*?<\/ul>)/is';
+        if (preg_match($fallbackPattern, $source)) {
+            $source = preg_replace($fallbackPattern, '$1' . "\n" . '<li>' . $button . '</li>', $source, 1);
+        }
     }
 
     /**
-     * ecauth_subject カラムを追加
-     *
-     * @return void
+     * 管理画面ログイン画面にパスキーログインスクリプトを挿入する。
+     * 実装は Phase B-3。ここではテンプレートが存在すれば読み込んで </body> 直前に挿入するだけ。
      */
-    protected function addEcAuthSubjectColumn()
+    protected function insertAdminPasskeyScript(&$source)
+    {
+        $tplFile = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/templates/admin/plg_EcAuthLogin2_admin_login_passkey.tpl';
+        if (!is_file($tplFile)) {
+            return;
+        }
+        $config = $this->loadConfig();
+        if (empty($config['client_id'])) {
+            return;
+        }
+
+        $script = file_get_contents($tplFile);
+        if ($script === false || $script === '') {
+            return;
+        }
+
+        // </body> 直前に挿入（無い場合は末尾追加）
+        if (stripos($source, '</body>') !== false) {
+            $source = preg_replace('/<\/body>/i', $script . "\n</body>", $source, 1);
+
+            return;
+        }
+        $source .= $script;
+    }
+
+    // ========================================================================
+    // Internal: install ヘルパー
+    // ========================================================================
+
+    /**
+     * @param string $table テーブル名
+     * @param bool $unique UNIQUE 制約を付けるか（dtb_member は UNIQUE 必須）
+     */
+    protected function ensureEcAuthSubjectColumn($table, $unique = false)
     {
         $objQuery = SC_Query_Ex::getSingletonInstance();
+        $columns = $objQuery->listTableFields($table);
+        if (in_array('ecauth_subject', $columns)) {
+            return;
+        }
 
-        // カラムが存在するか確認
-        $columns = $objQuery->listTableFields('dtb_customer');
+        $objQuery->query('ALTER TABLE ' . $table . ' ADD ecauth_subject VARCHAR(255)');
 
-        if (!in_array('ecauth_subject', $columns)) {
-            // カラム追加
-            $sql = 'ALTER TABLE dtb_customer ADD ecauth_subject VARCHAR(255)';
-            $objQuery->query($sql);
+        $indexName = 'idx_' . $table . '_ecauth_subject';
+        if ($unique) {
+            $objQuery->query('CREATE UNIQUE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
+        } else {
+            $objQuery->query('CREATE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
+        }
 
-            // インデックス作成
-            $sql = 'CREATE INDEX idx_customer_ecauth_subject ON dtb_customer(ecauth_subject)';
-            $objQuery->query($sql);
+        error_log('[EcAuthLogin2] Added ecauth_subject column to ' . $table);
+    }
 
-            GC_Utils_Ex::gfPrintLog('EcAuthLogin2: ecauth_subject カラムを追加しました');
+    protected function initializeDefaultConfig()
+    {
+        $objQuery = SC_Query_Ex::getSingletonInstance();
+        $row = $objQuery->getRow('free_field1', 'dtb_plugin', 'plugin_code = ?', array('EcAuthLogin2'));
+        if (!empty($row['free_field1'])) {
+            return;
+        }
+        $objQuery->update(
+            'dtb_plugin',
+            array(
+                'free_field1' => json_encode(new stdClass(), JSON_UNESCAPED_UNICODE),
+                'update_date' => 'CURRENT_TIMESTAMP',
+            ),
+            'plugin_code = ?',
+            array('EcAuthLogin2')
+        );
+    }
+
+    protected function copyPluginFiles()
+    {
+        $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
+
+        foreach (self::$fileMap as $relativeSrc => $destSpec) {
+            $src = $base . $relativeSrc;
+            $dest = $this->expandDestSpec($destSpec);
+            if (!is_file($src)) {
+                error_log('[EcAuthLogin2] Source not found: ' . $src);
+                continue;
+            }
+            $destDir = dirname($dest);
+            if (!is_dir($destDir)) {
+                @mkdir($destDir, 0755, true);
+            }
+            if (!copy($src, $dest)) {
+                error_log('[EcAuthLogin2] Copy failed: ' . $src . ' -> ' . $dest);
+            }
+        }
+    }
+
+    protected function removePluginFiles()
+    {
+        foreach (self::$fileMap as $relativeSrc => $destSpec) {
+            $dest = $this->expandDestSpec($destSpec);
+            if (is_file($dest)) {
+                @unlink($dest);
+            }
+        }
+        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/ecauth');
+        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/admin/ecauth');
+        $this->cleanupEmptyDir(HTML_REALDIR . 'ecauth/passkey');
+        $this->cleanupEmptyDir(HTML_REALDIR . 'ecauth');
+        if (defined('ADMIN_DIR')) {
+            $this->cleanupEmptyDir(HTML_REALDIR . ADMIN_DIR . 'ecauth/api');
+            $this->cleanupEmptyDir(HTML_REALDIR . ADMIN_DIR . 'ecauth');
+        }
+    }
+
+    protected function cleanupEmptyDir($dir)
+    {
+        if (is_dir($dir) && count(scandir($dir)) === 2) {
+            @rmdir($dir);
         }
     }
 
     /**
-     * 必要なファイルをコピー
-     *
-     * @return void
+     * "PLACEHOLDER:relative/path" 形式を絶対パスに展開する。
      */
-    protected function copyFiles()
+    protected function expandDestSpec($destSpec)
     {
-        $pluginDir = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
-
-        // html/ecauth/ ディレクトリ作成とファイルコピー
-        $htmlDir = HTML_REALDIR . 'ecauth/';
-        if (!is_dir($htmlDir)) {
-            mkdir($htmlDir, 0755, true);
+        list($placeholder, $relative) = explode(':', $destSpec, 2);
+        switch ($placeholder) {
+            case 'CLASS_REALDIR':
+                return CLASS_REALDIR . $relative;
+            case 'HTML_REALDIR':
+                return HTML_REALDIR . $relative;
+            case 'ADMIN_HTML_REALDIR':
+                return HTML_REALDIR . ADMIN_DIR . $relative;
+            case 'PLUGIN_HTML_REALDIR':
+                return PLUGIN_HTML_REALDIR . $relative;
+            default:
+                return $destSpec;
         }
-
-        if (is_file($pluginDir . 'html/ecauth/callback.php')) {
-            copy($pluginDir . 'html/ecauth/callback.php', $htmlDir . 'callback.php');
-        }
-
-        if (is_file($pluginDir . 'html/ecauth/authorize.php')) {
-            copy($pluginDir . 'html/ecauth/authorize.php', $htmlDir . 'authorize.php');
-        }
-
-        // data/class/ ディレクトリへのファイルコピー
-        $classDir = CLASS_REALDIR . 'pages/ecauth/';
-        if (!is_dir($classDir)) {
-            mkdir($classDir, 0755, true);
-        }
-
-        if (is_file($pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Callback.php')) {
-            copy(
-                $pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Callback.php',
-                $classDir . 'LC_Page_EcAuth_Callback.php'
-            );
-        }
-
-        if (is_file($pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Authorize.php')) {
-            copy(
-                $pluginDir . 'data/class/pages/ecauth/LC_Page_EcAuth_Authorize.php',
-                $classDir . 'LC_Page_EcAuth_Authorize.php'
-            );
-        }
-
-        // data/class/helper/ へのファイルコピー
-        $helperDir = CLASS_REALDIR . 'helper/';
-        if (is_file($pluginDir . 'data/class/helper/SC_Helper_EcAuth.php')) {
-            copy(
-                $pluginDir . 'data/class/helper/SC_Helper_EcAuth.php',
-                $helperDir . 'SC_Helper_EcAuth.php'
-            );
-        }
-
-        // data/class_extends/page_extends/ecauth/ へのファイルコピー
-        $extendsDir = CLASS_EX_REALDIR . 'page_extends/ecauth/';
-        if (!is_dir($extendsDir)) {
-            mkdir($extendsDir, 0755, true);
-        }
-
-        if (is_file($pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Callback_Ex.php')) {
-            copy(
-                $pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Callback_Ex.php',
-                $extendsDir . 'LC_Page_EcAuth_Callback_Ex.php'
-            );
-        }
-
-        if (is_file($pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Authorize_Ex.php')) {
-            copy(
-                $pluginDir . 'data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Authorize_Ex.php',
-                $extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php'
-            );
-        }
-
-        GC_Utils_Ex::gfPrintLog('EcAuthLogin2: ファイルをコピーしました');
     }
 
-    /**
-     * コピーしたファイルを削除
-     *
-     * @return void
-     */
-    protected function removeFiles()
+    protected function loadConfig()
     {
-        // html/ecauth/ ディレクトリ削除
-        $htmlDir = HTML_REALDIR . 'ecauth/';
-        if (is_dir($htmlDir)) {
-            if (is_file($htmlDir . 'callback.php')) {
-                unlink($htmlDir . 'callback.php');
-            }
-            if (is_file($htmlDir . 'authorize.php')) {
-                unlink($htmlDir . 'authorize.php');
-            }
-            rmdir($htmlDir);
+        $objQuery = SC_Query_Ex::getSingletonInstance();
+        $row = $objQuery->getRow('free_field1', 'dtb_plugin', 'plugin_code = ?', array('EcAuthLogin2'));
+        if (empty($row['free_field1'])) {
+            return array();
         }
+        $config = json_decode($row['free_field1'], true);
 
-        // data/class/pages/ecauth/ ディレクトリ削除
-        $classDir = CLASS_REALDIR . 'pages/ecauth/';
-        if (is_dir($classDir)) {
-            if (is_file($classDir . 'LC_Page_EcAuth_Callback.php')) {
-                unlink($classDir . 'LC_Page_EcAuth_Callback.php');
-            }
-            if (is_file($classDir . 'LC_Page_EcAuth_Authorize.php')) {
-                unlink($classDir . 'LC_Page_EcAuth_Authorize.php');
-            }
-            rmdir($classDir);
-        }
-
-        // data/class/helper/SC_Helper_EcAuth.php 削除
-        $helperFile = CLASS_REALDIR . 'helper/SC_Helper_EcAuth.php';
-        if (is_file($helperFile)) {
-            unlink($helperFile);
-        }
-
-        // data/class_extends/page_extends/ecauth/ ディレクトリ削除
-        $extendsDir = CLASS_EX_REALDIR . 'page_extends/ecauth/';
-        if (is_dir($extendsDir)) {
-            if (is_file($extendsDir . 'LC_Page_EcAuth_Callback_Ex.php')) {
-                unlink($extendsDir . 'LC_Page_EcAuth_Callback_Ex.php');
-            }
-            if (is_file($extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php')) {
-                unlink($extendsDir . 'LC_Page_EcAuth_Authorize_Ex.php');
-            }
-            rmdir($extendsDir);
-        }
-
-        GC_Utils_Ex::gfPrintLog('EcAuthLogin2: ファイルを削除しました');
+        return is_array($config) ? $config : array();
     }
 }

@@ -11,7 +11,7 @@ class plugin_info
     public static $PLUGIN_CODE = 'EcAuthLogin2';
 
     /** プラグイン名（必須）：EC-CUBE上で表示されるプラグイン名 */
-    public static $PLUGIN_NAME = 'EcAuth ソーシャルログイン';
+    public static $PLUGIN_NAME = 'EcAuth Login (パスキー / ソーシャルログイン)';
 
     /** クラス名（必須）：プラグインのクラス（拡張子は含まない） */
     public static $CLASS_NAME = 'EcAuthLogin2';
@@ -26,7 +26,7 @@ class plugin_info
     public static $AUTHOR = 'EcAuth';
 
     /** 説明（必須）：プラグインの説明 */
-    public static $DESCRIPTION = 'EcAuth IdP と連携し、ソーシャルログイン機能を提供します。Google、LINE、Facebook 等の外部 IdP でログインできるようになります。';
+    public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインと、フロントの B2C ソーシャルログイン（Google / LINE / Facebook 等）を提供します。';
 
     /** プラグインURL：プラグインの説明ページなど */
     public static $PLUGIN_SITE_URL = 'https://github.com/EcAuth/ec-cube2-ecauth';

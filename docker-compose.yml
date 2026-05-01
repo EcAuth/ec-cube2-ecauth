@@ -13,14 +13,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint: /wait-for-pgsql.sh
+    entrypoint: /usr/local/bin/ecauth-docker-entrypoint.sh
     command: apache2-foreground
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:80"
-      - "4430:443"
+      - "28080:80"
+      - "8081:443"
     environment:
       TZ: Asia/Tokyo
       PHP_POST_MAX_SIZE: 10M
@@ -29,8 +29,8 @@ services:
       PHP_ERROR_REPORTING: "E_ALL"
       PHP_ERROR_LOG: "/proc/self/fd/2"
       # EC-CUBE2 Config
-      HTTP_URL: https://localhost:4430/
-      HTTPS_URL: https://localhost:4430/
+      HTTP_URL: https://localhost:8081/
+      HTTPS_URL: https://localhost:8081/
       ROOT_URLPATH: /
       DOMAIN_NAME: ~
       DB_TYPE: pgsql
@@ -67,7 +67,7 @@ services:
       POSTGRES_USER: eccube_db_user
       POSTGRES_PASSWORD: password
     ports:
-      - "15432:5432"
+      - "25432:5432"
     volumes:
       - pg-database:/var/lib/postgresql/data
     networks:
