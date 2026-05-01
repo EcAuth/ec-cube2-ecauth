@@ -46,8 +46,12 @@ test.describe('Web インストール経路', () => {
     await page.goto(`${ADMIN_BASE}`);
     await page.fill('input[name="login_id"]', ADMIN_LOGIN_ID);
     await page.fill('input[name="password"]', ADMIN_PASSWORD);
-    await page.click('input[type="submit"], button[type="submit"]');
-    await page.waitForURL(/\/admin\/(home\.php|index\.php|$)/);
+    // EC-CUBE 2 admin の login form は submit ボタンが画面外配置されているため、
+    // 表示中の <a>LOGIN</a> リンク (javascript:void(0) で form.submit を呼ぶ) をクリックする
+    await Promise.all([
+      page.waitForURL(/\/admin\/(home\.php|index\.php|$)/, { timeout: 15000 }),
+      page.click('a:has-text("LOGIN")'),
+    ]);
   });
 
   test('tar.gz アップロード → 有効化 → 設定リンク', async ({ page }) => {
