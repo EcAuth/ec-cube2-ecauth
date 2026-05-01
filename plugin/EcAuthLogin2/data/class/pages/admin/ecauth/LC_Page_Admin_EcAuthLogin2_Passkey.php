@@ -65,7 +65,11 @@ class LC_Page_Admin_EcAuthLogin2_Passkey extends LC_Page_Admin_Ex
 
         $config = $objHelper->getConfig();
         $this->has_client_secret = !empty($config['client_secret']);
-        $this->ecauth_auth_js_url = 'https://cdn.ec-auth.io/auth-js/latest/ecauth-auth.umd.js';
+        // CDN は latest ではなく固定バージョンを参照する。
+        // バージョン固定の必要性: response.transports / timeout 上書きの挙動に
+        // プラグインが依存しているため、auth-js 側の挙動が変わると壊れる。
+        // バージョンを上げる際は新版でこれらの仕様が維持されていることを確認すること。
+        $this->ecauth_auth_js_url = 'https://cdn.ec-auth.io/auth-js/0.1.3/ecauth-auth.umd.js';
         $this->csrf_token = SC_Helper_Session_Ex::getToken();
     }
 

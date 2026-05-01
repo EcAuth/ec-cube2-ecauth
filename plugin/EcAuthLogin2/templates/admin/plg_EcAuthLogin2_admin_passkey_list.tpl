@@ -75,88 +75,9 @@
     </div>
 </div>
 
-<script>
-// base64url エンコード/デコードヘルパー
-function b64urlToBuf(s) {
-    s = s.replace(/-/g, '+').replace(/_/g, '/');
-    var pad = s.length % 4;
-    if (pad) { s += '='.repeat(4 - pad); }
-    var bin = atob(s);
-    var buf = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) { buf[i] = bin.charCodeAt(i); }
-    return buf.buffer;
-}
-function bufToB64url(buf) {
-    var bytes = new Uint8Array(buf);
-    var s = '';
-    for (var i = 0; i < bytes.length; i++) { s += String.fromCharCode(bytes[i]); }
-    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-// パスキー登録: register-options → navigator.credentials.create → register-verify
-async function doPasskeyRegister(b2bSubject) {
-    var csrfToken = document.querySelector('meta[name="ecauth-csrf-token"]').content;
-    var optionsUrl = '<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/api/register-options.php';
-    var verifyUrl = '<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/api/register-verify.php';
-
-    var optionsRes = await fetch(optionsUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        credentials: 'include',
-        body: JSON.stringify({ b2b_subject: b2bSubject })
-    });
-    if (!optionsRes.ok) { throw new Error('register_options_failed'); }
-    var opts = await optionsRes.json();
-
-    // EcAuth から timeout=0 が返ると Chrome が即時 NotAllowedError を返すため上書き
-    var publicKey = Object.assign({}, opts, {
-        challenge: b64urlToBuf(opts.challenge),
-        user: Object.assign({}, opts.user, { id: b64urlToBuf(opts.user.id) }),
-        excludeCredentials: (opts.excludeCredentials || []).map(function (c) {
-            return Object.assign({}, c, { id: b64urlToBuf(c.id) });
-        }),
-        timeout: 60000
-    });
-
-    var cred = await navigator.credentials.create({ publicKey: publicKey });
-
-    // EcAuth は response.transports を必須としているため getTransports() の結果を含める
-    var transports = (cred.response && typeof cred.response.getTransports === 'function')
-        ? cred.response.getTransports()
-        : [];
-
-    var credJson = {
-        id: cred.id,
-        rawId: bufToB64url(cred.rawId),
-        type: cred.type,
-        authenticatorAttachment: cred.authenticatorAttachment,
-        response: {
-            clientDataJSON: bufToB64url(cred.response.clientDataJSON),
-            attestationObject: bufToB64url(cred.response.attestationObject),
-            transports: transports
-        },
-        clientExtensionResults: cred.getClientExtensionResults()
-    };
-
-    var verifyRes = await fetch(verifyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        credentials: 'include',
-        body: JSON.stringify({ response: credJson, device_name: navigator.userAgent.substring(0, 50) })
-    });
-    if (!verifyRes.ok) {
-        var errBody;
-        try { errBody = await verifyRes.json(); } catch (e) { errBody = {}; }
-        var err = new Error('register_verify_failed');
-        err.detail = errBody;
-        throw err;
-    }
-    return await verifyRes.json();
-}
-</script>
-
 <meta name="ecauth-csrf-token" content="<!--{$csrf_token|h}-->">
 
+<script src="<!--{$ecauth_auth_js_url|h}-->"></script>
 <script>
 (function() {
     var addBtn = document.getElementById('ecauth-passkey-add');
@@ -213,8 +134,14 @@ async function doPasskeyRegister(b2bSubject) {
         })
         .then(function(data) {
             modal.style.display = 'none';
-            // Step 2: 登録オプション取得 → WebAuthn → 検証（@ecauth/auth-js 非依存の自前実装）
-            return doPasskeyRegister(data.b2b_subject);
+            // Step 2: 登録オプション取得 → WebAuthn → 検証（@ecauth/auth-js を使用）
+            return EcAuth.webauthn.register({
+                optionsUrl: '<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/api/register-options.php',
+                verifyUrl: '<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/api/register-verify.php',
+                csrfToken: csrfToken,
+                b2bSubject: data.b2b_subject,
+                deviceName: navigator.userAgent.substring(0, 50)
+            });
         })
         .then(function() {
             alert('パスキーを登録しました。');

@@ -9,74 +9,12 @@
  *
  * EcAuthLogin2.php の prefilterTransform でこのファイルが
  * file_get_contents() され、login.tpl の </body> 直前に挿入される。
+ * Smarty タグは使えない (コンパイル済み HTML として渡るため)。
+ * 動的な値は @ecauth/auth-js が API を fetch して取得する。
  *}-->
+<script src="https://cdn.ec-auth.io/auth-js/0.1.3/ecauth-auth.umd.js"></script>
 <script>
 (function () {
-    function b64urlToBuf(s) {
-        s = s.replace(/-/g, '+').replace(/_/g, '/');
-        var pad = s.length % 4;
-        if (pad) { s += '='.repeat(4 - pad); }
-        var bin = atob(s);
-        var buf = new Uint8Array(bin.length);
-        for (var i = 0; i < bin.length; i++) { buf[i] = bin.charCodeAt(i); }
-        return buf.buffer;
-    }
-    function bufToB64url(buf) {
-        var bytes = new Uint8Array(buf);
-        var s = '';
-        for (var i = 0; i < bytes.length; i++) { s += String.fromCharCode(bytes[i]); }
-        return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    async function doPasskeyAuthenticate() {
-        var optionsUrl = location.origin + '/ecauth/passkey/authenticate-options.php';
-        var verifyUrl = location.origin + '/ecauth/passkey/authenticate-verify.php';
-
-        var optionsRes = await fetch(optionsUrl, { method: 'POST', credentials: 'include' });
-        if (!optionsRes.ok) { throw new Error('authenticate_options_failed'); }
-        var opts = await optionsRes.json();
-
-        // EcAuth から timeout=0 が返ると Chrome が即時 NotAllowedError を返すため上書き
-        var publicKey = Object.assign({}, opts, {
-            challenge: b64urlToBuf(opts.challenge),
-            allowCredentials: (opts.allowCredentials || []).map(function (c) {
-                return Object.assign({}, c, { id: b64urlToBuf(c.id) });
-            }),
-            timeout: 60000
-        });
-
-        var assertion = await navigator.credentials.get({ publicKey: publicKey });
-
-        var assertionJson = {
-            id: assertion.id,
-            rawId: bufToB64url(assertion.rawId),
-            type: assertion.type,
-            authenticatorAttachment: assertion.authenticatorAttachment,
-            response: {
-                clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
-                authenticatorData: bufToB64url(assertion.response.authenticatorData),
-                signature: bufToB64url(assertion.response.signature),
-                userHandle: assertion.response.userHandle ? bufToB64url(assertion.response.userHandle) : null
-            },
-            clientExtensionResults: assertion.getClientExtensionResults()
-        };
-
-        var verifyRes = await fetch(verifyUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ response: assertionJson })
-        });
-        if (!verifyRes.ok) {
-            var errBody;
-            try { errBody = await verifyRes.json(); } catch (e) { errBody = {}; }
-            var err = new Error('authenticate_verify_failed');
-            err.detail = errBody;
-            throw err;
-        }
-        return await verifyRes.json();
-    }
-
     function injectButton() {
         if (location.protocol !== 'https:' || typeof window.PublicKeyCredential === 'undefined') {
             return;
@@ -103,7 +41,10 @@
         passkeyBtn.addEventListener('click', function () {
             passkeyBtn.disabled = true;
             passkeyBtn.textContent = '認証中...';
-            doPasskeyAuthenticate().then(function (result) {
+            EcAuth.webauthn.authenticate({
+                optionsUrl: location.origin + '/ecauth/passkey/authenticate-options.php',
+                verifyUrl: location.origin + '/ecauth/passkey/authenticate-verify.php'
+            }).then(function (result) {
                 if (result && result.redirect_url) {
                     window.location.href = result.redirect_url;
                     return;
@@ -115,13 +56,8 @@
                 passkeyBtn.disabled = false;
                 passkeyBtn.textContent = 'パスキーでログイン';
                 if (!error || error.name === 'NotAllowedError') { return; }
-                console.error('Passkey authentication error:', error, error.detail || '');
-                var detail = '';
-                if (error.detail && error.detail.ecauth_response) {
-                    var ec = error.detail.ecauth_response;
-                    detail = ec.error_description || ec.title || '';
-                }
-                alert('パスキー認証に失敗しました。' + (detail ? '\n' + detail : ''));
+                console.error('Passkey authentication error:', error);
+                alert('パスキー認証に失敗しました。');
             });
         });
     }
