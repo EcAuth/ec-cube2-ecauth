@@ -275,27 +275,68 @@ class EcAuthLogin2
     // ========================================================================
 
     /**
+     * 列とインデックスを冪等に確保する。
+     * 列だけ存在しインデックスが欠損している環境（途中失敗・手動追加・
+     * 旧バージョンからのアップグレード等）でもインデックスを補修する。
+     *
      * @param string $table テーブル名
      * @param bool $unique UNIQUE 制約を付けるか（dtb_member は UNIQUE 必須）
      */
     protected function ensureEcAuthSubjectColumn($table, $unique = false)
     {
         $objQuery = SC_Query_Ex::getSingletonInstance();
+
+        // (1) 列の確保
         $columns = $objQuery->listTableFields($table);
-        if (in_array('ecauth_subject', $columns)) {
-            return;
+        if (!in_array('ecauth_subject', $columns)) {
+            $objQuery->query('ALTER TABLE ' . $table . ' ADD ecauth_subject VARCHAR(255)');
+            error_log('[EcAuthLogin2] Added ecauth_subject column to ' . $table);
         }
 
-        $objQuery->query('ALTER TABLE ' . $table . ' ADD ecauth_subject VARCHAR(255)');
-
+        // (2) インデックスの確保（列が既存でもインデックスだけ無い状態を補修）
         $indexName = 'idx_' . $table . '_ecauth_subject';
-        if ($unique) {
-            $objQuery->query('CREATE UNIQUE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
-        } else {
-            $objQuery->query('CREATE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
+        if (!$this->indexExists($table, $indexName)) {
+            if ($unique) {
+                $objQuery->query('CREATE UNIQUE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
+            } else {
+                $objQuery->query('CREATE INDEX ' . $indexName . ' ON ' . $table . '(ecauth_subject)');
+            }
+            error_log('[EcAuthLogin2] Created index ' . $indexName . ' on ' . $table);
+        }
+    }
+
+    /**
+     * インデックス存在チェック（PostgreSQL / MySQL 両対応）。
+     * 確認失敗時は false を返し、後続の CREATE INDEX で例外を再表面化させる。
+     *
+     * @param string $table
+     * @param string $indexName
+     * @return bool
+     */
+    protected function indexExists($table, $indexName)
+    {
+        $objQuery = SC_Query_Ex::getSingletonInstance();
+        try {
+            if (defined('DB_TYPE') && DB_TYPE === 'pgsql') {
+                $row = $objQuery->getRow(
+                    'indexname',
+                    'pg_indexes',
+                    'tablename = ? AND indexname = ?',
+                    array($table, $indexName)
+                );
+            } else {
+                $row = $objQuery->getRow(
+                    'INDEX_NAME',
+                    'INFORMATION_SCHEMA.STATISTICS',
+                    'TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+                    array($table, $indexName)
+                );
+            }
+        } catch (Exception $e) {
+            return false;
         }
 
-        error_log('[EcAuthLogin2] Added ecauth_subject column to ' . $table);
+        return !empty($row);
     }
 
     protected function initializeDefaultConfig()
