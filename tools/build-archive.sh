@@ -29,6 +29,11 @@ if [ -z "${VERSION}" ]; then
 fi
 
 OUTPUT="${1:-${REPO_ROOT}/dist/EcAuthLogin2-${VERSION}.tar.gz}"
+# 相対パス指定時は絶対パスに変換する
+# (cd ${STAGE} 後に tar すると、相対 OUTPUT は trap で削除される STAGE 配下に出力されてしまう)
+if [[ "${OUTPUT}" != /* ]]; then
+    OUTPUT="${PWD}/${OUTPUT}"
+fi
 mkdir -p "$(dirname "${OUTPUT}")"
 
 # 一時ステージングディレクトリで開発専用ファイルを除外してから固める
@@ -40,8 +45,8 @@ cp -R "${PLUGIN_DIR}/." "${STAGE}/"
 # 開発環境専用ファイルは配布アーカイブから除外する
 rm -rf "${STAGE}/tools"
 
-cd "${STAGE}"
-tar czf "${OUTPUT}" *
+# tar -C で cwd を変えずにアーカイブ。`-- .` でグロブ展開を避け SC2035 も回避
+tar -C "${STAGE}" -czf "${OUTPUT}" -- .
 
 echo "[build-archive] Built: ${OUTPUT}"
 echo "[build-archive] Contents:"
