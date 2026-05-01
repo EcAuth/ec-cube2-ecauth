@@ -32,14 +32,23 @@ jobs:
           SKIP_PLUGIN_INSTALL: 'true'
         run: |
           docker compose up -d --build
-          # Wait for EC-CUBE to become ready
+          # Wait for EC-CUBE to become ready (fail-fast on timeout to surface
+          # readiness failures here instead of in later Playwright steps)
+          ready=false
           for i in $(seq 1 60); do
             if curl -sk "https://localhost:8081/" >/dev/null 2>&1; then
               echo "EC-CUBE is up"
+              ready=true
               break
             fi
+            echo "Waiting for EC-CUBE... ($i/60)"
             sleep 2
           done
+          if [ "$ready" != "true" ]; then
+            echo "EC-CUBE did not become ready in time" >&2
+            docker compose logs ec-cube --tail 100 || true
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
