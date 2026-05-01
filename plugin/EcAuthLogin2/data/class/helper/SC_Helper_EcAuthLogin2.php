@@ -308,6 +308,9 @@ class SC_Helper_EcAuthLogin2
     /**
      * 顧客としてログイン
      *
+     * 注意: B2C OIDC フェデレーションは後続リリースで正式提供予定であり、
+     * 現段階では実運用での使用を想定していない。
+     *
      * @param array $customer
      * @return void
      */
@@ -318,7 +321,12 @@ class SC_Helper_EcAuthLogin2
         try {
             $objCustomer->setLogin($customer['email']);
         } catch (Exception $e) {
-            // ログのみ
+            $customerId = isset($customer['customer_id']) ? $customer['customer_id'] : 'unknown';
+            GC_Utils_Ex::gfPrintLog(
+                '[EcAuthLogin2] Customer login failed: customer_id=' . $customerId
+                . ' exception=' . get_class($e)
+                . ' message=' . $e->getMessage()
+            );
         }
 
         if (function_exists('session_regenerate_id')) {
