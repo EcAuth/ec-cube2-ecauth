@@ -1,19 +1,26 @@
 /*
- * EcAuthLogin2 プラグインの Web インストール経路 E2E テスト。
+ * EcAuthLogin2 プラグインの Web インストール経路 E2E スモークテスト。
+ *
+ * 目的:
+ *   オーナーズストア UI 経由で tar.gz を投入し、playwright.yml（パスキー機能 E2E）の
+ *   スタートラインに立てる状態（プラグイン有効化済み + 設定画面到達可能 +
+ *   パスキー UI 到達可能 + フロントエントリポイント配置済み）になることを確認する。
+ *   パスキー登録〜ログインまでの機能テストは admin-passkey-flow.spec.ts に分離。
  *
  * 前提条件:
  *   - SKIP_PLUGIN_INSTALL=true で起動された素の EC-CUBE 2 環境
  *     （プラグインが docker-entrypoint.sh で自動インストールされていない状態）
  *   - tools/build-archive.sh でビルド済みの dist/EcAuthLogin2-*.tar.gz が存在
+ *   - ADMIN_DIR がランダム化されている可能性があるため ECCUBE_ADMIN_BASE 環境変数で受ける
  *
- * 検証内容:
+ * 検証フロー:
  *   1. 管理画面ログイン
- *   2. オーナーズストア > プラグインを追加する 経由で tar.gz をアップロード
- *   3. プラグイン一覧に EcAuthLogin2 が現れる
- *   4. プラグインを有効化
- *   5. 「設定」リンクから設定画面に遷移できる
- *
- * パスキー登録〜ログインまでの完全な E2E は admin-passkey-flow.spec.ts に切り出す。
+ *   2. オーナーズストアでプラグインアップロード（install() 関数経由 = mode=install POST）
+ *   3. プラグイン一覧に EcAuthLogin2 が表示
+ *   4. 「有効にする」 checkbox で有効化（mode=enable POST）
+ *   5. 設定画面が 200 で開く
+ *   6. /<ADMIN_BASE>ecauth/passkey.php が 200 で「登録済みパスキー」が表示
+ *   7. /ecauth/callback.php が 302 で必要 param 不足エラーを返す
  */
 
 import { test, expect } from '@playwright/test';
@@ -21,6 +28,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 const ADMIN_BASE = process.env.ECCUBE_ADMIN_BASE || '/admin/';
+const ADMIN_BASE_RE = ADMIN_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ADMIN_LOGIN_ID = process.env.ECCUBE_ADMIN_LOGIN_ID || 'admin';
 const ADMIN_PASSWORD = process.env.ECCUBE_ADMIN_PASSWORD || 'password';
 
@@ -41,84 +49,93 @@ function findArchive(): string {
   return candidates[0];
 }
 
-test.describe('Web インストール経路', () => {
-  // TODO: EC-CUBE 2.25 のオーナーズストア UI に対する正確なロケータが特定できておらず
-  // setInputFiles が timeout する。フォーム構造を実機調査して修正するまで CI で skip。
-  // 現状 tar.gz のビルド自体は ./tools/build-archive.sh で確認できるため、
-  // 「アーカイブを CI で生成し artifact として保存する」ところまでは
-  // .github/workflows/e2e-web-install.yml で動作している。
-  test.skip(true, 'EC-CUBE 2.25 オーナーズストア UI のロケータ特定が必要 (TODO)');
-
+test.describe.serial('Web インストール経路スモーク', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${ADMIN_BASE}`);
+    await page.goto(ADMIN_BASE);
     await page.fill('input[name="login_id"]', ADMIN_LOGIN_ID);
     await page.fill('input[name="password"]', ADMIN_PASSWORD);
-    // EC-CUBE 2 admin の login form は submit ボタンが画面外配置されているため、
-    // 表示中の <a>LOGIN</a> リンク (javascript:void(0) で form.submit を呼ぶ) をクリックする
+    // EC-CUBE 2 admin の login form は submit ボタンが画面外配置のため、
+    // 表示中の <a>LOGIN</a> リンク (javascript:void(0) で form.submit を呼ぶ) をクリック
     await Promise.all([
-      page.waitForURL(/\/admin\/(home\.php|index\.php|$)/, { timeout: 15000 }),
+      page.waitForURL(new RegExp(`${ADMIN_BASE_RE}(home\\.php|index\\.php|$)`), { timeout: 15000 }),
       page.click('a:has-text("LOGIN")'),
     ]);
   });
 
-  test('tar.gz アップロード → 有効化 → 設定リンク', async ({ page }) => {
+  test('オーナーズストア UI 経由で tar.gz をアップロードしプラグインを有効化する', async ({ page }) => {
+    test.setTimeout(60000);
     const archive = findArchive();
 
-    // オーナーズストア > プラグイン管理
-    await page.goto(`${ADMIN_BASE}ownersstore/index.php`);
+    // オーナーズストア「プラグイン管理」ページ
+    await page.goto(`${ADMIN_BASE}ownersstore/`);
+    await expect(page.locator('h2', { hasText: 'プラグイン登録' })).toBeVisible();
 
-    // 「プラグインを追加する」ボタン or タブをクリック
-    const addLink = page.locator('a:has-text("プラグインを追加")');
-    if (await addLink.isVisible()) {
-      await addLink.click();
-    } else {
-      // 直接アップロードページへ
-      await page.goto(`${ADMIN_BASE}ownersstore/upload.php`);
-    }
+    // プラグインファイルをセット
+    await page.locator('input[type="file"][name="plugin_file"]').setInputFiles(archive);
 
-    // ファイル input にアーカイブをセット
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(archive);
+    // <a onclick="install()"> がクリックされると confirm 後 mode=install で submit
+    page.once('dialog', (dialog) => {
+      expect(dialog.message()).toContain('プラグインをインストール');
+      dialog.accept().catch(() => {});
+    });
+    await Promise.all([
+      page.waitForLoadState('networkidle', { timeout: 30000 }),
+      page.locator('a.btn-action:has-text("インストール")').click(),
+    ]);
 
-    // アップロード送信
-    await page.click('button[type="submit"], input[type="submit"]:has-text("アップロード"), input[type="submit"]:has-text("追加")');
+    // プラグイン一覧に EcAuthLogin2 が現れる
+    await expect(page.locator('body')).toContainText('EcAuthLogin2', { timeout: 15000 });
 
-    // プラグイン一覧に戻り、EcAuthLogin2 が現れる
-    await page.goto(`${ADMIN_BASE}ownersstore/index.php`);
-    await expect(page.locator('body')).toContainText('EcAuthLogin2');
+    // 「有効にする」 checkbox（name="enable"）をクリック → confirm → mode=enable で submit
+    const enableCheckbox = page.locator('input[type="checkbox"][name="enable"]').first();
+    await expect(enableCheckbox).toBeVisible();
+    page.once('dialog', (dialog) => {
+      expect(dialog.message()).toContain('プラグインを有効');
+      dialog.accept().catch(() => {});
+    });
+    await Promise.all([
+      page.waitForLoadState('networkidle', { timeout: 30000 }),
+      enableCheckbox.click(),
+    ]);
 
-    // 有効化
-    const enableButton = page.locator('a:has-text("有効"), button:has-text("有効")').first();
-    if (await enableButton.isVisible()) {
-      // 確認ダイアログ等があれば（click 前にハンドラを登録しないと取りこぼす）
-      page.once('dialog', (d) => d.accept());
-      await enableButton.click();
-    }
-
-    // 「設定」リンクが現れる
-    const configLink = page.locator('a:has-text("設定")').first();
-    await expect(configLink).toBeVisible();
-
-    // 設定画面に遷移
-    await configLink.click();
-    await expect(page.locator('body')).toContainText('EcAuth Login プラグイン設定');
+    // 有効化後は「プラグイン設定」リンクが現れる
+    await expect(page.locator('a:has-text("プラグイン設定")')).toBeVisible({ timeout: 10000 });
   });
 
-  test('設定画面で client_id / client_secret を保存できる', async ({ page }) => {
-    // 設定画面に直接遷移（前テストでインストール済み前提）
-    await page.goto('/plugin/EcAuthLogin2/config.php');
+  test('スモーク: プラグイン設定画面が開く', async ({ page }) => {
+    // load_plugin_config.php?plugin_id=... 経由で設定画面に到達
+    // plugin_id は SERIAL なので新規環境では 1 だが、デフォルト値を埋め込み済みプラグインがある場合に備え
+    // dtb_plugin から動的解決する代わりに、画面に表示される「プラグイン設定」リンクから辿る
+    await page.goto(`${ADMIN_BASE}ownersstore/`);
+    await Promise.all([
+      page.waitForLoadState('networkidle', { timeout: 15000 }),
+      page.locator('a:has-text("プラグイン設定")').first().click(),
+    ]);
+
+    // 設定画面のタイトルとフォーム要素が表示される = LC_Page クラスのオートロード成功
+    // + Smarty テンプレートのコピー成功 + dtb_plugin 登録成功 を間接的に保証
     await expect(page.locator('body')).toContainText('EcAuth Login プラグイン設定');
+    await expect(page.locator('input[name="client_id"]')).toBeVisible();
+    await expect(page.locator('input[name="client_secret"]')).toBeVisible();
+  });
 
-    await page.fill('input[name="client_id"]', 'test_client_id_e2e');
-    await page.fill('input[name="client_secret"]', 'test_client_secret_e2e');
-    await page.fill('input[name="ecauth_base_url"]', 'https://localhost:9091');
-    await page.click('button:has-text("登録")');
+  test('スモーク: 管理画面パスキー登録 UI が開く', async ({ page }) => {
+    // /<ADMIN_BASE>ecauth/passkey.php に直接遷移
+    // = html/admin/ecauth/passkey.php が Web インストール経路で正しく配置されたこと
+    // + LC_Page_Admin_EcAuthLogin2_Passkey の autoload が機能すること
+    await page.goto(`${ADMIN_BASE}ecauth/passkey.php`);
+    await expect(page.locator('span', { hasText: '登録済みパスキー' })).toBeVisible();
+  });
 
-    // ページ再読み込み後、client_id が保存されている
-    await page.goto('/plugin/EcAuthLogin2/config.php');
-    await expect(page.locator('input[name="client_id"]')).toHaveValue('test_client_id_e2e');
-    // client_secret は表示しないが has_client_secret = true で placeholder が出る
-    const placeholder = await page.locator('input[name="client_secret"]').getAttribute('placeholder');
-    expect(placeholder ?? '').toContain('保存済み');
+  test('スモーク: フロントの ecauth/callback.php が必要 param 不足で正しくリダイレクトする', async ({ page }) => {
+    // /ecauth/callback.php (ADMIN_DIR 配下ではなく、HTML ルート直下のフロントエントリポイント)
+    // = html/ecauth/callback.php が Web インストール経路で正しく配置されたこと
+    // + LC_Page_EcAuthLogin2_Callback の autoload が機能すること
+    // パラメータなしでアクセスすると invalid_request → mypage/login.php にリダイレクト
+    const response = await page.goto('/ecauth/callback.php');
+    // sendRedirect の挙動上、Playwright は最終遷移先の URL を取得する
+    expect(page.url()).toMatch(/\/mypage\/login\.php/);
+    // status は最終ページの 200（マイページログイン画面）でよい。リダイレクトされたことが本質。
+    expect(response?.status()).toBeLessThan(500);
   });
 });

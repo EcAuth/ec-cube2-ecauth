@@ -27,13 +27,24 @@ jobs:
           name: EcAuthLogin2-archive
           path: dist/EcAuthLogin2-*.tar.gz
 
+      - name: Generate randomized ADMIN_DIR
+        # ADMIN_DIR がランダム化された本番想定環境でも Web インストール経路が
+        # 機能することを実証する。形式は前後にスラッシュ付き（例: /admin_xxxx/）。
+        run: |
+          ADMIN_DIR="admin_$(openssl rand -hex 6)/"
+          echo "ADMIN_DIR=${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "ECCUBE_ADMIN_BASE=/${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "[ci] randomized ADMIN_DIR=${ADMIN_DIR}"
+
       - name: Start EC-CUBE 2 without auto plugin install
         env:
           SKIP_PLUGIN_INSTALL: 'true'
+          ADMIN_DIR: ${{ env.ADMIN_DIR }}
         run: |
           docker compose up -d --build
           # Wait for EC-CUBE to become ready (fail-fast on timeout to surface
-          # readiness failures here instead of in later Playwright steps)
+          # readiness failures here instead of in later Playwright steps).
+          # ADMIN_DIR がランダム化されているためルート / で確認する。
           ready=false
           for i in $(seq 1 60); do
             if curl -sk "https://localhost:8081/" >/dev/null 2>&1; then
@@ -69,7 +80,7 @@ jobs:
       - name: Run web-install E2E
         env:
           ECCUBE_BASE_URL: 'https://localhost:8081'
-          ECCUBE_ADMIN_BASE: '/admin/'
+          ECCUBE_ADMIN_BASE: ${{ env.ECCUBE_ADMIN_BASE }}
           ECCUBE_ADMIN_LOGIN_ID: admin
           ECCUBE_ADMIN_PASSWORD: password
         run: npx playwright test tests/web-install.spec.ts --reporter=list
