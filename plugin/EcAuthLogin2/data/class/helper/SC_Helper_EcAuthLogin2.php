@@ -582,7 +582,24 @@ class SC_Helper_EcAuthLogin2
     }
 
     /**
-     * id_token (JWT) ペイロードから sub を取り出す（署名検証は EcAuth 側で実施済み）
+     * id_token (JWT) ペイロードから sub を取り出す。
+     *
+     * 暗号署名は意図的に検証していない。これは OIDC Core 3.1.3.7.6 が許容する
+     * "back-channel direct communication via TLS" 経路で id_token を取得しているため:
+     *
+     *   - 取得元: POST /v1/token (HTTPS, client_id + client_secret 認証)
+     *   - サーバー間直接通信なので TLS server validation が issuer validation を兼ねる
+     *
+     * 仕様引用 (OIDC Core 3.1.3.7.6):
+     *   "If the ID Token is received via direct communication between the Client
+     *    and the Token Endpoint, the TLS server validation MAY be used to validate
+     *    the issuer in place of checking the token signature."
+     *
+     * リファレンス: ec-cube4-ecauth の PasskeyAuthService::extractSubFromIdToken と
+     * 同等の方針。
+     *
+     * 防御深化として JWKS による署名検証 (firebase/php-jwt 等) を導入する余地は
+     * あるが、4 系・2 系横断で整合させる必要があるため別タスク扱い。
      *
      * @param string $idToken
      * @return string|null
