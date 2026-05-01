@@ -15,7 +15,13 @@
     },
     "autoload": {
         "classmap": [
-            "plugin/EcAuthLogin2/data/class"
+            "plugin/EcAuthLogin2/data/class",
+            "vendor/nanasess/ec-cube2-class-extends-stubs/data/class_extends",
+            "vendor/ec-cube/ec-cube2/data/class",
+            "vendor/ec-cube/ec-cube2/data/class_extends"
+        ],
+        "exclude-from-classmap": [
+            "vendor/ec-cube/ec-cube2/data/class_extends/helper_extends/SC_Helper_Plugin_Ex.php"
         ]
     },
     "require-dev": {

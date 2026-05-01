@@ -1,4 +1,5 @@
 <?php
+
 /**
  * EcAuthLogin2 プラグイン情報クラス
  *

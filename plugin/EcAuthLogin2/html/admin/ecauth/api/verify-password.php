@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 管理画面 パスワード再認証 API
  * Copyright (C) 2026 EcAuth

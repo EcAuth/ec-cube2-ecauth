@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 プラグインメインクラス
  * Copyright (C) 2026 EcAuth
@@ -78,8 +79,11 @@ class EcAuthLogin2
             case 'enable':
             case 'disable':
                 $instance = new self($arguments[0]);
+
                 return call_user_func(array($instance, 'do' . ucfirst($name)), $arguments[0]);
         }
+
+        return null;
     }
 
     public function __call($name, $arguments)
@@ -91,6 +95,8 @@ class EcAuthLogin2
             case 'disable':
                 return call_user_func(array($this, 'do' . ucfirst($name)), $arguments[0]);
         }
+
+        return null;
     }
 
     /**
@@ -130,7 +136,6 @@ class EcAuthLogin2
     /**
      * 処理の介入箇所とコールバック関数を設定
      *
-     * @param SC_Helper_Plugin $objHelperPlugin
      * @param int $priority
      */
     public function register(SC_Helper_Plugin $objHelperPlugin, $priority)
@@ -158,14 +163,12 @@ class EcAuthLogin2
     // ========================================================================
     // フックポイント
     // ========================================================================
-
     /**
      * Smarty テンプレートのプレフィルタ。
      * - フロントの mypage/login.tpl と shopping/index.tpl に B2C ログインボタンを差し込む
      * - 管理画面の admin/login.tpl にパスキーログインスクリプトを差し込む（Phase B-3 で実装）
      *
      * @param string $source テンプレートソース
-     * @param LC_Page_Ex $objPage
      * @param string $filename
      */
     public function prefilterTransform(&$source, LC_Page_Ex $objPage, $filename)
@@ -196,7 +199,7 @@ class EcAuthLogin2
             return;
         }
 
-        $providerName = !empty($config['provider_name']) ? $config['provider_name'] : 'EcAuth';
+        $providerName = empty($config['provider_name']) ? 'EcAuth' : $config['provider_name'];
         $authorizeUrl = HTTPS_URL . 'ecauth/authorize.php';
 
         $providerNameHtml = htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8');
@@ -318,7 +321,7 @@ class EcAuthLogin2
 
     protected function removePluginFiles()
     {
-        foreach (self::$fileMap as $relativeSrc => $destSpec) {
+        foreach (self::$fileMap as $destSpec) {
             $dest = $this->expandDestSpec($destSpec);
             if (is_file($dest)) {
                 @unlink($dest);

@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 管理画面 設定ページ
  * Copyright (C) 2026 EcAuth
@@ -19,6 +20,10 @@ require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
  */
 class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
 {
+    /**
+     * @var bool
+     */
+    public $has_client_secret;
     public function init()
     {
         parent::init();

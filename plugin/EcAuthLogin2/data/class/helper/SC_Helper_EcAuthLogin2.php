@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 ヘルパークラス
  * Copyright (C) 2026 EcAuth
@@ -22,16 +23,16 @@
 class SC_Helper_EcAuthLogin2
 {
     /** @var string プラグインコード */
-    const PLUGIN_CODE = 'EcAuthLogin2';
+    public const PLUGIN_CODE = 'EcAuthLogin2';
 
     /** @var int PKCE code_verifier の長さ */
-    const CODE_VERIFIER_LENGTH = 64;
+    public const CODE_VERIFIER_LENGTH = 64;
 
     /** @var string Discovery エンドポイントのデフォルト Base URL */
-    const DEFAULT_DISCOVERY_URL = 'https://api.ec-auth.io';
+    public const DEFAULT_DISCOVERY_URL = 'https://api.ec-auth.io';
 
     /** @var string Discovery のクライアント解決パス */
-    const CLIENT_RESOLVE_PATH = '/platform/v1/client-resolve';
+    public const CLIENT_RESOLVE_PATH = '/platform/v1/client-resolve';
 
     /**
      * プラグイン設定を取得
@@ -667,7 +668,6 @@ class SC_Helper_EcAuthLogin2
      * @param string $method
      * @param string $path
      * @param array|null $body
-     * @param array $extraHeaders
      * @return array{status: int, data: array}
      */
     private function callApi($method, $path, $body, array $extraHeaders = array())
@@ -725,7 +725,7 @@ class SC_Helper_EcAuthLogin2
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($err) {
+        if ($err !== '' && $err !== '0') {
             GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] curl error: ' . $err);
 
             return false;

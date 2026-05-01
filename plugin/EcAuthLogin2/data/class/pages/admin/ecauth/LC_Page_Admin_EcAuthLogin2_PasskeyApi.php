@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 管理画面パスキー API 中継ページ
  * Copyright (C) 2026 EcAuth
@@ -193,7 +194,7 @@ class LC_Page_Admin_EcAuthLogin2_PasskeyApi extends LC_Page_Admin_Ex
         $objQuery = SC_Query_Ex::getSingletonInstance();
         $member = $objQuery->getRow('*', 'dtb_member', 'member_id = ? AND del_flg = 0 AND work = 1', array($memberId));
 
-        return !empty($member) ? $member : null;
+        return empty($member) ? null : $member;
     }
 
     /**
@@ -220,9 +221,6 @@ class LC_Page_Admin_EcAuthLogin2_PasskeyApi extends LC_Page_Admin_Ex
         return hash_equals((string) $member['password'], (string) $hashed);
     }
 
-    /**
-     * @param array $response
-     */
     protected function fixWebAuthnEmptyObjects(array &$response)
     {
         if (

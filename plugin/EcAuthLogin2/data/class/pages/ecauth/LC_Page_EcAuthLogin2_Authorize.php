@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 認可リクエストページ
  * Copyright (C) 2026 EcAuth

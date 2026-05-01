@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 パスキー認証 API 中継ページ（公開エンドポイント）
  * Copyright (C) 2026 EcAuth

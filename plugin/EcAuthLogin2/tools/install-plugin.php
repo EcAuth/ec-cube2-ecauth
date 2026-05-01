@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 プラグインを CLI からインストールする開発環境用スクリプト。
  * Copyright (C) 2026 EcAuth
@@ -95,7 +96,7 @@ $envClientId = getenv('ECAUTH_CLIENT_ID');
 $envBaseUrl = getenv('ECAUTH_BASE_URL') ?: getenv('ECAUTH_AUTHORIZATION_ENDPOINT');
 if (!empty($envClientId) || !empty($envBaseUrl)) {
     $row = $objQuery->getRow('free_field1', 'dtb_plugin', 'plugin_code = ?', array(PLUGIN_CODE));
-    $current = !empty($row['free_field1']) ? json_decode($row['free_field1'], true) : array();
+    $current = empty($row['free_field1']) ? array() : json_decode($row['free_field1'], true);
     if (!is_array($current)) {
         $current = array();
     }
@@ -103,28 +104,28 @@ if (!empty($envClientId) || !empty($envBaseUrl)) {
     if (!empty($envClientId)) {
         $current['client_id'] = $envClientId;
     }
-    if (!empty(getenv('ECAUTH_CLIENT_SECRET'))) {
+    if (!(in_array(getenv('ECAUTH_CLIENT_SECRET'), array('', '0'), true) || getenv('ECAUTH_CLIENT_SECRET') === array() || getenv('ECAUTH_CLIENT_SECRET') === false)) {
         $current['client_secret'] = getenv('ECAUTH_CLIENT_SECRET');
     }
-    if (!empty(getenv('ECAUTH_BASE_URL'))) {
+    if (!(getenv('ECAUTH_BASE_URL') === array() || in_array(getenv('ECAUTH_BASE_URL'), array('', '0'), true) || getenv('ECAUTH_BASE_URL') === false)) {
         $current['ecauth_base_url'] = rtrim(getenv('ECAUTH_BASE_URL'), '/');
     }
-    if (!empty(getenv('ECAUTH_AUTHORIZATION_ENDPOINT'))) {
+    if (!(in_array(getenv('ECAUTH_AUTHORIZATION_ENDPOINT'), array('', '0'), true) || getenv('ECAUTH_AUTHORIZATION_ENDPOINT') === array() || getenv('ECAUTH_AUTHORIZATION_ENDPOINT') === false)) {
         $current['authorization_endpoint'] = getenv('ECAUTH_AUTHORIZATION_ENDPOINT');
     }
-    if (!empty(getenv('ECAUTH_TOKEN_ENDPOINT'))) {
+    if (!(in_array(getenv('ECAUTH_TOKEN_ENDPOINT'), array('', '0'), true) || getenv('ECAUTH_TOKEN_ENDPOINT') === array() || getenv('ECAUTH_TOKEN_ENDPOINT') === false)) {
         $current['token_endpoint'] = getenv('ECAUTH_TOKEN_ENDPOINT');
     }
-    if (!empty(getenv('ECAUTH_USERINFO_ENDPOINT'))) {
+    if (!(in_array(getenv('ECAUTH_USERINFO_ENDPOINT'), array('', '0'), true) || getenv('ECAUTH_USERINFO_ENDPOINT') === array() || getenv('ECAUTH_USERINFO_ENDPOINT') === false)) {
         $current['userinfo_endpoint'] = getenv('ECAUTH_USERINFO_ENDPOINT');
     }
-    if (!empty(getenv('ECAUTH_EXTERNAL_USERINFO_ENDPOINT'))) {
+    if (!(in_array(getenv('ECAUTH_EXTERNAL_USERINFO_ENDPOINT'), array('', '0'), true) || getenv('ECAUTH_EXTERNAL_USERINFO_ENDPOINT') === array() || getenv('ECAUTH_EXTERNAL_USERINFO_ENDPOINT') === false)) {
         $current['external_userinfo_endpoint'] = getenv('ECAUTH_EXTERNAL_USERINFO_ENDPOINT');
     }
-    if (!empty(getenv('ECAUTH_PROVIDER_NAME'))) {
+    if (!(in_array(getenv('ECAUTH_PROVIDER_NAME'), array('', '0'), true) || getenv('ECAUTH_PROVIDER_NAME') === array() || getenv('ECAUTH_PROVIDER_NAME') === false)) {
         $current['provider_name'] = getenv('ECAUTH_PROVIDER_NAME');
     }
-    if (!empty(getenv('ECAUTH_RP_ID'))) {
+    if (!(in_array(getenv('ECAUTH_RP_ID'), array('', '0'), true) || getenv('ECAUTH_RP_ID') === array() || getenv('ECAUTH_RP_ID') === false)) {
         $current['rp_id'] = getenv('ECAUTH_RP_ID');
     }
 

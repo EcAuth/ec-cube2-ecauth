@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 パスキー管理画面エントリーポイント
  * Copyright (C) 2026 EcAuth

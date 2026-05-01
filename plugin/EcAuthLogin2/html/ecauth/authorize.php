@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 認可リクエストエントリーポイント
  * Copyright (C) 2026 EcAuth
@@ -9,7 +10,7 @@
  * version 2.1 of the License, or (at your option) any later version.
  */
 
-require_once '../require.php';
+require_once __DIR__ . '/../require.php';
 require_once CLASS_REALDIR . 'pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php';
 
 $objPage = new LC_Page_EcAuthLogin2_Authorize();

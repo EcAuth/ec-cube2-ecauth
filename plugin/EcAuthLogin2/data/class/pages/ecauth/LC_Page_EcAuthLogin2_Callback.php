@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 コールバックページ
  * Copyright (C) 2026 EcAuth
@@ -207,7 +208,7 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
         $objSess->SetSession('authority', isset($member['authority']) ? (int) $member['authority'] : 0);
         $objSess->SetSession('login_name', isset($member['name']) ? $member['name'] : '');
         $objSess->SetSession('uniqid', $objSess->getUniqId());
-        $lastLogin = !empty($member['login_date']) ? $member['login_date'] : date('Y-m-d H:i:s');
+        $lastLogin = empty($member['login_date']) ? date('Y-m-d H:i:s') : $member['login_date'];
         $objSess->SetSession('last_login', $lastLogin);
 
         // last_login の更新

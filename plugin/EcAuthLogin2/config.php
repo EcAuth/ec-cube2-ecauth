@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 設定画面エントリポイント
  * Copyright (C) 2026 EcAuth

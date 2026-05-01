@@ -1,4 +1,5 @@
 <?php
+
 /*
  * EcAuthLogin2 管理画面 パスキー管理ページ
  * Copyright (C) 2026 EcAuth
@@ -20,6 +21,24 @@ require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
  */
 class LC_Page_Admin_EcAuthLogin2_Passkey extends LC_Page_Admin_Ex
 {
+    public $passkeys;
+    /**
+     * @var string|null
+     */
+    public $error_message;
+    public $current_credential_id;
+    /**
+     * @var bool
+     */
+    public $has_client_secret;
+    /**
+     * @var string
+     */
+    public $ecauth_auth_js_url;
+    /**
+     * @var string
+     */
+    public $csrf_token;
     public function init()
     {
         parent::init();
