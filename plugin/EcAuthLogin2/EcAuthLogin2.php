@@ -10,12 +10,18 @@
  * version 2.1 of the License, or (at your option) any later version.
  *
  * 設計メモ:
- * - SC_Plugin_Base を継承すると EC-CUBE 2.17+ で fatal になるため継承しない
- *   (@see https://github.com/EC-CUBE/ec-cube2/issues/551)
+ * - SC_Plugin_Base を継承すると EC-CUBE 2.17.2+ で
+ *   `Fatal error: Cannot make static method SC_Plugin_Base::install() non static`
+ *   となるため継承しない。回避策としてマジックメソッド経由で
+ *   install/uninstall/enable/disable を実装する
+ *   (@see https://github.com/EC-CUBE/ec-cube2/issues/551)。
  * - 一方、Web インストール経路（LC_Page_Admin_OwnersStore::execPlugin）は
- *   `method_exists($class_name, $exec_func)` で install/uninstall/enable/disable
- *   の存在を確認する。`method_exists()` は __call/__callStatic のマジック
- *   メソッドには反応しないため、install 等は **実メソッドとして** static で定義する。
+ *   `method_exists($class_name, $exec_func)` で install 等の存在を確認する。
+ *   `method_exists()` は __call/__callStatic のマジックメソッドには
+ *   反応しない（PHP 仕様）ため、マジックメソッドだけだと「install が
+ *   見つかりません」エラーで Web インストールが失敗する。
+ * - 上記を両立するため、**マジックメソッドと実メソッドを併設** する。
+ *   実メソッドが優先的に呼ばれ、マジックメソッドは保険として残す。
  */
 class EcAuthLogin2
 {
@@ -103,6 +109,45 @@ class EcAuthLogin2
     {
         $instance = new self($plugin);
         $instance->doDisable($plugin);
+    }
+
+    /**
+     * issue #551 回避用のマジックメソッド。
+     * SC_Plugin_Base 継承を避けて install/uninstall/enable/disable を実装する
+     * 公式回避パターン (@see https://gist.github.com/nanasess/6447bfd9e3cd26815c9ce7d0e8b1cb71)。
+     *
+     * 上の static 実メソッドが定義されている経路では実メソッドが優先されるため
+     * このマジックメソッドは到達しないが、将来 EC-CUBE 本体側のチェック方式が
+     * 変更された場合の保険として残す。
+     */
+    public static function __callStatic($name, $arguments)
+    {
+        switch ($name) {
+            case 'install':
+            case 'uninstall':
+            case 'enable':
+            case 'disable':
+                $plugin = isset($arguments[0]) ? $arguments[0] : array();
+
+                return self::$name($plugin, isset($arguments[1]) ? $arguments[1] : null);
+        }
+
+        return null;
+    }
+
+    public function __call($name, $arguments)
+    {
+        switch ($name) {
+            case 'install':
+            case 'uninstall':
+            case 'enable':
+            case 'disable':
+                $plugin = isset($arguments[0]) ? $arguments[0] : $this->arrSelfInfo;
+
+                return self::$name($plugin, isset($arguments[1]) ? $arguments[1] : null);
+        }
+
+        return null;
     }
 
     /**
