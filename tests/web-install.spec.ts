@@ -90,9 +90,9 @@ test.describe('Web インストール経路', () => {
     // 有効化
     const enableButton = page.locator('a:has-text("有効"), button:has-text("有効")').first();
     if (await enableButton.isVisible()) {
-      await enableButton.click();
-      // 確認ダイアログ等があれば
+      // 確認ダイアログ等があれば（click 前にハンドラを登録しないと取りこぼす）
       page.once('dialog', (d) => d.accept());
+      await enableButton.click();
     }
 
     // 「設定」リンクが現れる
