@@ -74,10 +74,9 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
             return;
         }
 
-        // どちらのフローにも一致しなかった。残留 verifier を掃除する
-        // （次回の beginB2BPkce() が上書きするため実害はないが、衛生上）。
-        unset($_SESSION['ecauth_b2b_code_verifier']);
-
+        // ここで残留 verifier を unset してはいけない。state はそのまま残るため、
+        // 別タブで進行中のログインの verifier だけを壊し invalid_grant を招く。
+        // 残留しても次回の beginB2BPkce() が上書きするので実害はない。
         $this->handleError('invalid_state', 'State パラメータが無効です。', 'unknown');
     }
 
@@ -91,6 +90,12 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
         // PKCE の code_verifier を消費する。SC_Session_Ex::regenerateSID() は
         // establishAdminSession() 内でこれより後に走るため、ここでは生存している。
         $codeVerifier = $objHelper->getAndClearB2BCodeVerifier();
+        if ($codeVerifier === null) {
+            // ここは state が一致した後なのでセッションは生きており、通常は到達しない。
+            // 早期 return はせず警告に留める: プラグイン更新をまたいだ認証（旧コードが
+            // challenge 無しで発行した認可コード）は verifier 無しで正常に交換できるため。
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] B2B callback missing code_verifier in session');
+        }
 
         $tokenResult = $objHelper->exchangeTokenForB2B($code, $redirectUri, $codeVerifier);
         if ($tokenResult['status'] !== 200) {
