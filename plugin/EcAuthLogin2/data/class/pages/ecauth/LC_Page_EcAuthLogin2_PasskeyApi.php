@@ -118,11 +118,17 @@ class LC_Page_EcAuthLogin2_PasskeyApi
         $state = bin2hex(random_bytes(32));
         $_SESSION['ecauth_b2b_state'] = $state;
 
+        // PKCE (RFC 7636) の code_verifier をセッションに保存し、code_challenge のみを
+        // EcAuth に送る。verifier はブラウザを経由せず、コールバック時に PHP 側で使う。
+        $codeChallenge = $objHelper->beginB2BPkce();
+
         $redirectUri = HTTPS_URL . 'ecauth/callback.php';
 
-        $result = $objHelper->authenticateVerify($sessionId, $redirectUri, $state, $body['response']);
+        $result = $objHelper->authenticateVerify($sessionId, $redirectUri, $state, $body['response'], $codeChallenge);
         if ($result['status'] !== 200) {
-            unset($_SESSION['ecauth_b2b_state']);
+            // 失敗した verifier を残すと、次回認証時に新しい challenge と食い違って
+            // トークン交換が invalid_grant になる。state と揃えて必ず破棄する。
+            unset($_SESSION['ecauth_b2b_state'], $_SESSION['ecauth_b2b_code_verifier']);
             $this->respond($result['status'], array(
                 'error' => 'authentication_failed',
                 'ecauth_status' => $result['status'],

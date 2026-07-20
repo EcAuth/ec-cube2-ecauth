@@ -17,8 +17,10 @@ require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
  * EcAuth コールバックページ。
  *
  * B2C ソーシャルログイン（state が ecauth_state、PKCE 経路）と
- * B2B パスキー（state が ecauth_b2b_state、client_secret 経路）の
+ * B2B パスキー（state が ecauth_b2b_state、client_secret + PKCE 経路）の
  * 双方を扱う。state がどちらに一致するかでフローを切り替える。
+ * PKCE の code_verifier はフローごとに別のセッションキーで保持する
+ * （B2C: ecauth_code_verifier / B2B: ecauth_b2b_code_verifier）。
  */
 class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
 {
@@ -72,6 +74,9 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
             return;
         }
 
+        // ここで残留 verifier を unset してはいけない。state はそのまま残るため、
+        // 別タブで進行中のログインの verifier だけを壊し invalid_grant を招く。
+        // 残留しても次回の beginB2BPkce() が上書きするので実害はない。
         $this->handleError('invalid_state', 'State パラメータが無効です。', 'unknown');
     }
 
@@ -82,7 +87,17 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
     {
         $redirectUri = HTTPS_URL . 'ecauth/callback.php';
 
-        $tokenResult = $objHelper->exchangeTokenForB2B($code, $redirectUri);
+        // PKCE の code_verifier を消費する。SC_Session_Ex::regenerateSID() は
+        // establishAdminSession() 内でこれより後に走るため、ここでは生存している。
+        $codeVerifier = $objHelper->getAndClearB2BCodeVerifier();
+        if ($codeVerifier === null) {
+            // ここは state が一致した後なのでセッションは生きており、通常は到達しない。
+            // 早期 return はせず警告に留める: プラグイン更新をまたいだ認証（旧コードが
+            // challenge 無しで発行した認可コード）は verifier 無しで正常に交換できるため。
+            GC_Utils_Ex::gfPrintLog('[EcAuthLogin2] B2B callback missing code_verifier in session');
+        }
+
+        $tokenResult = $objHelper->exchangeTokenForB2B($code, $redirectUri, $codeVerifier);
         if ($tokenResult['status'] !== 200) {
             $this->handleError('token_error', '認証に失敗しました。', 'b2b');
 

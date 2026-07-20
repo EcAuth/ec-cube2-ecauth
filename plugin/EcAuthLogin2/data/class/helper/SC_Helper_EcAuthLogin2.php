@@ -384,9 +384,12 @@ class SC_Helper_EcAuthLogin2
      * @param string $redirectUri
      * @param string|null $state
      * @param array $response WebAuthn assertion
+     * @param string|null $codeChallenge PKCE (RFC 7636) の code_challenge。
+     *                                   指定すると発行される認可コードに束縛され、
+     *                                   トークン交換時に code_verifier が必須になる
      * @return array
      */
-    public function authenticateVerify($sessionId, $redirectUri, $state, array $response)
+    public function authenticateVerify($sessionId, $redirectUri, $state, array $response, $codeChallenge = null)
     {
         $body = array(
             'session_id' => $sessionId,
@@ -396,6 +399,10 @@ class SC_Helper_EcAuthLogin2
         );
         if ($state !== null) {
             $body['state'] = $state;
+        }
+        if ($codeChallenge !== null) {
+            $body['code_challenge'] = $codeChallenge;
+            $body['code_challenge_method'] = 'S256';
         }
 
         return $this->callApi('POST', '/v1/b2b/passkey/authenticate/verify', $body);
@@ -466,11 +473,14 @@ class SC_Helper_EcAuthLogin2
     }
 
     /**
-     * 認可コードをトークンに交換（B2B: client_secret 認証、PKCE なし）
+     * 認可コードをトークンに交換（B2B: client_secret 認証 + PKCE）
      *
+     * @param string|null $codeVerifier PKCE (RFC 7636) の code_verifier。
+     *                                  authenticateVerify() で code_challenge を
+     *                                  送った場合は必須
      * @return array
      */
-    public function exchangeTokenForB2B($code, $redirectUri)
+    public function exchangeTokenForB2B($code, $redirectUri, $codeVerifier = null)
     {
         $endpoint = $this->buildEcAuthUrl('/v1/token');
 
@@ -481,6 +491,9 @@ class SC_Helper_EcAuthLogin2
             'client_id' => $this->getClientId(),
             'client_secret' => $this->getClientSecret(),
         );
+        if ($codeVerifier !== null) {
+            $params['code_verifier'] = $codeVerifier;
+        }
 
         $response = $this->httpPostForm($endpoint, $params);
         if ($response === false) {
@@ -672,6 +685,39 @@ class SC_Helper_EcAuthLogin2
         }
         $codeVerifier = $_SESSION['ecauth_code_verifier'];
         unset($_SESSION['ecauth_code_verifier']);
+
+        return $codeVerifier;
+    }
+
+    /**
+     * B2B: Code Verifier を生成してセッションに保存し、Code Challenge を返す。
+     *
+     * verifier はブラウザを一度も経由せず、コールバック時に PHP 側で
+     * トークン交換に使う。セッションキーは B2C 経路（ecauth_code_verifier）と
+     * 分離し、両フローが並行しても衝突しないようにする。
+     *
+     * @return string Code Challenge (S256)
+     */
+    public function beginB2BPkce()
+    {
+        $codeVerifier = $this->generateCodeVerifier();
+        $_SESSION['ecauth_b2b_code_verifier'] = $codeVerifier;
+
+        return $this->generateCodeChallenge($codeVerifier);
+    }
+
+    /**
+     * B2B: Code Verifier をセッションから取得して削除
+     *
+     * @return string|null
+     */
+    public function getAndClearB2BCodeVerifier()
+    {
+        if (empty($_SESSION['ecauth_b2b_code_verifier'])) {
+            return null;
+        }
+        $codeVerifier = $_SESSION['ecauth_b2b_code_verifier'];
+        unset($_SESSION['ecauth_b2b_code_verifier']);
 
         return $codeVerifier;
     }
