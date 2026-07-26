@@ -20,6 +20,29 @@
     </div>
     <!--{/if}-->
 
+    <div class="card" style="margin-bottom: 1.5em; padding: 1em; background: #f8f9fa; border-radius: 4px;">
+        <h3>Client ID / Client Secret の取得方法</h3>
+        <p>本プラグインのご利用には、EcAuth が発行する Client ID と Client Secret が必要です。まだお持ちでない場合は、以下の手順で取得してください。管理者 5 ユーザーまで無料でご利用いただけます。</p>
+
+        <h4 style="margin-top: 1.2em;">はじめて EcAuth をご利用の場合</h4>
+        <ol style="margin: 0.5em 0 1em 1.5em;">
+            <li style="margin-bottom: 0.3em;">下の「EcAuth に申し込む」ボタンから申込フォームを開き、メールアドレスとサイトの情報を入力します。</li>
+            <li style="margin-bottom: 0.3em;">入力したメールアドレス宛に確認メールが届きます。メール内のリンクを開くと、EcAuth のアカウントが作成されます。</li>
+            <li>EcAuth のマイページに Client ID と Client Secret が表示されます。これを下の設定欄に入力し、「登録」ボタンを押してください。</li>
+        </ol>
+        <p>
+            <a class="btn-action" id="ecauth-signup-link" href="<!--{$signup_url|h}-->" target="_blank" rel="noopener noreferrer">EcAuth に申し込む</a>
+        </p>
+
+        <hr style="margin: 1.2em 0; border: none; border-top: 1px solid #ddd;" />
+
+        <h4>すでにお申し込み済みの場合</h4>
+        <p>申込は不要です。EcAuth のマイページを開くと、ご契約中のショップの Client ID と Client Secret を確認できます。Client Secret が分からなくなった場合は、マイページから再発行できます。</p>
+        <p style="margin-bottom: 0;">
+            <a class="btn-action" id="ecauth-mypage-link" href="<!--{$mypage_url|h}-->" target="_blank" rel="noopener noreferrer">EcAuth マイページを開く</a>
+        </p>
+    </div>
+
     <form name="form1" id="form1" method="post" action="">
         <input type="hidden" name="<!--{$smarty.const.TRANSACTION_ID_NAME}-->" value="<!--{$transactionid}-->" />
         <input type="hidden" name="mode" value="save" />

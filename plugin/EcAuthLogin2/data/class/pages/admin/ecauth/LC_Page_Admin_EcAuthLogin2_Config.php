@@ -24,6 +24,17 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
      * @var bool
      */
     public $has_client_secret;
+
+    /**
+     * @var string 申込フォーム（ec-auth.io）の URL
+     */
+    public $signup_url;
+
+    /**
+     * @var string マイページ（ec-auth.io）の URL
+     */
+    public $mypage_url;
+
     public function init()
     {
         parent::init();
@@ -60,6 +71,10 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
 
         $this->arrForm = $objFormParam->getFormParamList();
         $this->has_client_secret = $this->loadConfigBoolean('client_secret');
+
+        $signupUrls = $objHelper->getSignupUrls();
+        $this->signup_url = $signupUrls['signup'];
+        $this->mypage_url = $signupUrls['mypage'];
     }
 
     /**
