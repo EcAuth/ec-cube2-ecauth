@@ -30,6 +30,11 @@ const CLIENT_ID = process.env.CLIENT_ID || '';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || '';
 const RP_ID = process.env.RP_ID || 'localhost';
 
+// 設定画面の導線 URL は SC_Helper_EcAuthLogin2 の定数が既定値で、環境変数で上書きできる。
+// テスト側も同じ解決順にしておく（CI では環境変数未設定なので既定値が使われる）。
+const SIGNUP_URL = process.env.ECAUTH_SIGNUP_URL || 'https://ec-auth.io/signup/';
+const MYPAGE_URL = process.env.ECAUTH_MYPAGE_URL || 'https://ec-auth.io/mypage/';
+
 test.describe.serial('E2E: B2Bパスキー登録からログイン完了までのフロー', () => {
   test.skip(
     !ECAUTH_BASE_URL || !CLIENT_ID || !CLIENT_SECRET,
@@ -238,6 +243,20 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
     // プラグイン設定: 通常はオーナーズストア経由でポップアップだが、
     // <ADMIN_BASE>load_plugin_config.php?plugin_id=<id> に直接アクセスして同じ画面を出せる
     await page.goto(`${ADMIN_BASE}load_plugin_config.php?plugin_id=${PLUGIN_ID}`);
+
+    // 申込・マイページ導線（ec-auth.io）が設定画面に出ていること。
+    // 別タブで開く（target=_blank）ため rel の付与も併せて検証する。
+    const signupLink = page.locator('#ecauth-signup-link');
+    await expect(signupLink).toBeVisible();
+    await expect(signupLink).toHaveAttribute('href', SIGNUP_URL);
+    await expect(signupLink).toHaveAttribute('target', '_blank');
+    await expect(signupLink).toHaveAttribute('rel', /noopener/);
+    const mypageLink = page.locator('#ecauth-mypage-link');
+    await expect(mypageLink).toBeVisible();
+    await expect(mypageLink).toHaveAttribute('href', MYPAGE_URL);
+    await expect(mypageLink).toHaveAttribute('target', '_blank');
+    await expect(mypageLink).toHaveAttribute('rel', /noopener/);
+
     await page.fill('input[name="client_id"]', CLIENT_ID);
     await page.fill('input[name="client_secret"]', CLIENT_SECRET);
     await page.fill('input[name="ecauth_base_url"]', ECAUTH_BASE_URL);

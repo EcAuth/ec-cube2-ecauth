@@ -35,6 +35,18 @@ class SC_Helper_EcAuthLogin2
     public const CLIENT_RESOLVE_PATH = '/platform/v1/client-resolve';
 
     /**
+     * 申込フォームのデフォルト URL
+     *
+     * Hugo 生成の実 URL に合わせて末尾スラッシュ付き（無いと 301 が挟まる）。
+     *
+     * @var string
+     */
+    public const DEFAULT_SIGNUP_URL = 'https://ec-auth.io/signup/';
+
+    /** @var string マイページのデフォルト URL */
+    public const DEFAULT_MYPAGE_URL = 'https://ec-auth.io/mypage/';
+
+    /**
      * プラグイン設定を取得
      *
      * @return array 設定配列（client_id, client_secret, ecauth_base_url, rp_id, ...）
@@ -508,6 +520,25 @@ class SC_Helper_EcAuthLogin2
         $status = isset($tokens['error']) ? 400 : 200;
 
         return array('status' => $status, 'data' => $tokens);
+    }
+
+    /**
+     * 設定画面に表示する申込 / マイページ導線の URL を返す
+     *
+     * 環境変数 ECAUTH_SIGNUP_URL / ECAUTH_MYPAGE_URL が設定されていればそちらを優先する
+     * （resolveClient() の ECAUTH_CLIENT_RESOLVE_URL と同じ解決順）。
+     *
+     * @return array{signup: string, mypage: string}
+     */
+    public function getSignupUrls()
+    {
+        $signupUrl = getenv('ECAUTH_SIGNUP_URL');
+        $mypageUrl = getenv('ECAUTH_MYPAGE_URL');
+
+        return array(
+            'signup' => $signupUrl ? $signupUrl : self::DEFAULT_SIGNUP_URL,
+            'mypage' => $mypageUrl ? $mypageUrl : self::DEFAULT_MYPAGE_URL,
+        );
     }
 
     /**
