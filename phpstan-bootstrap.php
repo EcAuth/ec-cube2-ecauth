@@ -30,7 +30,11 @@ defined('PASSWORD_HASH_ALGOS') || define('PASSWORD_HASH_ALGOS', 'sha256');
 defined('CERT_STRING') || define('CERT_STRING', '');
 defined('TRANSACTION_ID_NAME') || define('TRANSACTION_ID_NAME', 'transactionid');
 
-defined('STEXT_LEN') || define('STEXT_LEN', 255);
+// 文字長の定数だけは EC-CUBE 2 の実値 (data/mtb_constants_init.php) を写す。
+// 他の定数と違い「何文字まで入るか」がプラグインの正しさに直結するため、
+// ダミー値を置くと実環境との差に気付けない。
+defined('STEXT_LEN') || define('STEXT_LEN', 50);
+defined('MTEXT_LEN') || define('MTEXT_LEN', 200);
 defined('URL_LEN') || define('URL_LEN', 1024);
 defined('LOGIN_RETRY_INTERVAL') || define('LOGIN_RETRY_INTERVAL', 3);
 defined('SAFE') || define('SAFE', false);
