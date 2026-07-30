@@ -116,10 +116,19 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
     protected function buildFormParam()
     {
         $objFormParam = new SC_FormParam_Ex();
-        $objFormParam->addParam('Client ID', 'client_id', STEXT_LEN, 'a', array('EXIST_CHECK', 'MAX_LENGTH_CHECK'));
-        $objFormParam->addParam('Client Secret', 'client_secret', STEXT_LEN, 'a', array('MAX_LENGTH_CHECK'));
+        // client_id / client_secret / rp_id は STEXT_LEN(50) では足りない。
+        // EcAuth の申込で払い出される client_id は "ec-{組織コード}-{UUID32桁}" で、
+        // 固定部だけで 36 文字あるため、組織コードが 15 文字以上（例 shop.example.jp →
+        // shop-example-jp）になると 50 文字を超える。テンプレート側の maxlength で
+        // 静かに切り詰められ、Client ID から Base URL を解決できずに
+        // 「テナントが見つかりません」となって設定を保存できなくなる。
+        // 保存先の dtb_plugin.free_field1 は text なので、上限は MTEXT_LEN(200) で足りる。
+        $objFormParam->addParam('Client ID', 'client_id', MTEXT_LEN, 'a', array('EXIST_CHECK', 'MAX_LENGTH_CHECK'));
+        $objFormParam->addParam('Client Secret', 'client_secret', MTEXT_LEN, 'a', array('MAX_LENGTH_CHECK'));
         $objFormParam->addParam('EcAuth Base URL', 'ecauth_base_url', URL_LEN, 'a', array('URL_CHECK', 'MAX_LENGTH_CHECK'));
-        $objFormParam->addParam('RP ID', 'rp_id', STEXT_LEN, 'a', array('MAX_LENGTH_CHECK'));
+        // rp_id はサイトのホスト名。ドメインは 50 文字を超えうる。
+        $objFormParam->addParam('RP ID', 'rp_id', MTEXT_LEN, 'a', array('MAX_LENGTH_CHECK'));
+        // provider_name は federate-oauth2 のような短い識別子なので STEXT_LEN のまま。
         $objFormParam->addParam('Provider Name', 'provider_name', STEXT_LEN, 'a', array('MAX_LENGTH_CHECK'));
 
         return $objFormParam;

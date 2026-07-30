@@ -28,13 +28,15 @@
             <tr>
                 <th>Client ID <span style="color: #e60012;">*</span></th>
                 <td>
-                    <input type="text" name="client_id" value="<!--{$arrForm.client_id.value|h}-->" size="60" maxlength="<!--{$smarty.const.STEXT_LEN}-->" />
+                    <!--{* client_id は "ec-{組織コード}-{UUID32桁}" で 50 文字を超えうる。
+                           maxlength が短いとブラウザが静かに切り詰め、Base URL の自動解決に失敗する。 *}-->
+                    <input type="text" name="client_id" value="<!--{$arrForm.client_id.value|h}-->" size="60" maxlength="<!--{$smarty.const.MTEXT_LEN}-->" />
                 </td>
             </tr>
             <tr>
                 <th>Client Secret <!--{if !$has_client_secret}--><span style="color: #e60012;">*</span><!--{/if}--></th>
                 <td>
-                    <input type="password" name="client_secret" value="" size="60" maxlength="<!--{$smarty.const.STEXT_LEN}-->"
+                    <input type="password" name="client_secret" value="" size="60" maxlength="<!--{$smarty.const.MTEXT_LEN}-->"
                         placeholder="<!--{if $has_client_secret}-->●●●●●●●●●●●●●●●●（保存済み。変更時のみ入力）<!--{/if}-->" autocomplete="new-password" />
                 </td>
             </tr>
@@ -48,7 +50,7 @@
             <tr>
                 <th>RP ID</th>
                 <td>
-                    <input type="text" name="rp_id" value="<!--{$arrForm.rp_id.value|h}-->" size="60" maxlength="<!--{$smarty.const.STEXT_LEN}-->" />
+                    <input type="text" name="rp_id" value="<!--{$arrForm.rp_id.value|h}-->" size="60" maxlength="<!--{$smarty.const.MTEXT_LEN}-->" />
                     <p style="color: #666; font-size: 0.9em;">未設定の場合、サイトのホスト名が使用されます。</p>
                 </td>
             </tr>
