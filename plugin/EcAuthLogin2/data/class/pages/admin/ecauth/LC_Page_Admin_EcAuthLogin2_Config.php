@@ -110,10 +110,25 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
 
                 return;
             }
-            $config['ecauth_base_url'] = $resolved['base_url'];
+            // client-resolve 応答も無条件には信頼しない。応答が汚染されると
+            // トークン交換先ごと攻撃者のホストに向く（EcAuthDocs #101）。
+            $candidateBaseUrl = $resolved['base_url'];
+            $errorField = 'client_id';
         } else {
-            $config['ecauth_base_url'] = rtrim($inputBaseUrl, '/');
+            $candidateBaseUrl = $inputBaseUrl;
+            $errorField = 'ecauth_base_url';
         }
+
+        $validator = new SC_Helper_EcAuthLogin2_BaseUrl();
+        $normalizedBaseUrl = $validator->normalize($candidateBaseUrl);
+        if ($normalizedBaseUrl === null) {
+            $this->arrErr = array(
+                $errorField => '※ EcAuth URL が許可されていないホストを指しています。https で始まる正しい EcAuth の URL を指定してください。開発・ステージング環境のホストを使う場合は、環境変数 ECAUTH_ALLOWED_HOSTS に追加してください。',
+            );
+
+            return;
+        }
+        $config['ecauth_base_url'] = $normalizedBaseUrl;
 
         // client_secret は空入力時は既存値を維持する
         $newSecret = isset($_POST['client_secret']) ? trim($_POST['client_secret']) : '';

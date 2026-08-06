@@ -52,6 +52,13 @@ services:
       ECAUTH_USERINFO_ENDPOINT: ${ECAUTH_USERINFO_ENDPOINT:-}
       ECAUTH_EXTERNAL_USERINFO_ENDPOINT: ${ECAUTH_EXTERNAL_USERINFO_ENDPOINT:-}
       ECAUTH_PROVIDER_NAME: ${ECAUTH_PROVIDER_NAME:-federate-oauth2}
+      # EcAuth Base URL として許可するホスト（カンマ区切り）。
+      # dev / staging の EcAuth は ec-auth.io 配下に無いため、そこへ繋ぐ場合は
+      # ECAUTH_ALLOWED_HOSTS に「完全なホスト名」を足すこと。
+      # .azurewebsites.net のようなサフィックス指定にはしないこと。共有ホスティングの
+      # サフィックスを許可すると、そのサービスの全利用者を信頼することになり、
+      # EcAuthDocs #101 の修正の意味が失われる。
+      ECAUTH_ALLOWED_HOSTS: ${ECAUTH_ALLOWED_HOSTS:-.ec-auth.io}
       # CI 用フラグ（docker-entrypoint.sh が読む）
       # SKIP_PLUGIN_INSTALL=true で entrypoint のプラグイン CLI 自動インストールを抑止し、
       # Web インストール経路のテスト（e2e-web-install.yml）を可能にする

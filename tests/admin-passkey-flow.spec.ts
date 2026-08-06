@@ -257,6 +257,17 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
     await expect(mypageLink).toHaveAttribute('target', '_blank');
     await expect(mypageLink).toHaveAttribute('rel', /noopener/);
 
+    // EcAuthDocs #101: Base URL はトークン交換先かつ JWKS 取得先になるため、
+    // 許可リスト外のホストは保存段階で弾く。正しい設定を保存する前に確認しておく
+    // （後続テストの前提を壊さないよう、この時点では設定は未保存のまま）。
+    await page.fill('input[name="client_id"]', CLIENT_ID);
+    await page.fill('input[name="client_secret"]', CLIENT_SECRET);
+    await page.fill('input[name="ecauth_base_url"]', 'https://auth.example.com');
+    await page.fill('input[name="rp_id"]', RP_ID);
+    await page.click('button:has-text("登録")');
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+    await expect(page.locator('text=許可されていないホスト')).toBeVisible();
+
     await page.fill('input[name="client_id"]', CLIENT_ID);
     await page.fill('input[name="client_secret"]', CLIENT_SECRET);
     await page.fill('input[name="ecauth_base_url"]', ECAUTH_BASE_URL);
