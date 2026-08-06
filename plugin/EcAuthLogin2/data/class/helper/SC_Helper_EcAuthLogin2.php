@@ -684,7 +684,8 @@ class SC_Helper_EcAuthLogin2
     {
         $baseUrl = $this->getEcAuthBaseUrl();
         if ($baseUrl === '') {
-            $this->logSafely('EcAuth Base URL is not allowed; refusing to verify ID token', array());
+            // 未設定・許可外のいずれか。詳細は getEcAuthBaseUrl() 側のログを見る。
+            $this->logSafely('EcAuth Base URL is unavailable; refusing to verify ID token', array());
 
             return null;
         }
@@ -852,12 +853,16 @@ class SC_Helper_EcAuthLogin2
     private function getEcAuthBaseUrl()
     {
         $config = $this->getConfig();
-        if (!isset($config['ecauth_base_url'])) {
+
+        // 未設定（プラグイン導入直後）と「設定されているが許可されていない」は
+        // 運用上まったく別の事象なので、前者をここで警告にしない。
+        $configured = isset($config['ecauth_base_url']) ? trim((string) $config['ecauth_base_url']) : '';
+        if ($configured === '') {
             return '';
         }
 
         $validator = new SC_Helper_EcAuthLogin2_BaseUrl();
-        $baseUrl = $validator->normalize($config['ecauth_base_url']);
+        $baseUrl = $validator->normalize($configured);
         if ($baseUrl === null) {
             $this->logSafely('EcAuth Base URL is not allowed', array());
 
