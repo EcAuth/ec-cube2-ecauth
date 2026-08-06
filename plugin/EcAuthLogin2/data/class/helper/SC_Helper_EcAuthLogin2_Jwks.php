@@ -39,8 +39,23 @@ class SC_Helper_EcAuthLogin2_Jwks
      */
     public const CACHE_TTL = 300;
 
+    /**
+     * 強制再取得（kid 不一致時）を許可する最短間隔（秒）。
+     *
+     * kid は id_token のヘッダから来るため、kid を変え続けるトークンを渡されると
+     * キャッシュを迂回して JWKS エンドポイントへのリクエストを増幅できてしまう。
+     * EcAuth 側の設定ミスで「JWKS に無い kid」が発行され続ける状況でも、
+     * ログインのたびに 2 回 HTTP を叩くことになる。クールダウンで上限を設ける。
+     *
+     * @var int
+     */
+    public const FORCED_REFRESH_COOLDOWN = 60;
+
     /** @var string キャッシュファイル名の接頭辞 */
     private const CACHE_PREFIX = 'ecauth_jwks_';
+
+    /** @var string 強制再取得のクールダウンマーカーの接頭辞 */
+    private const COOLDOWN_PREFIX = 'ecauth_jwks_forced_';
 
     /**
      * HTTP GET を行う callable。引数は string $url、
@@ -86,11 +101,16 @@ class SC_Helper_EcAuthLogin2_Jwks
             return null;
         }
 
-        if (!$forceRefresh) {
-            $cached = $this->readCache($baseUrl);
-            if ($cached !== null) {
-                return $cached;
-            }
+        $cached = $this->readCache($baseUrl);
+
+        if (!$forceRefresh && $cached !== null) {
+            return $cached;
+        }
+
+        // 直近に強制再取得したばかりなら、キャッシュを返して外部リクエストを抑える。
+        // キャッシュが空のときは返せるものが無いので取得を許可する。
+        if ($forceRefresh && $cached !== null && !$this->tryConsumeForcedRefresh($baseUrl)) {
+            return $cached;
         }
 
         $keys = $this->fetch($baseUrl);
@@ -101,6 +121,41 @@ class SC_Helper_EcAuthLogin2_Jwks
         $this->writeCache($baseUrl, $keys);
 
         return $keys;
+    }
+
+    /**
+     * 強制再取得のクールダウンを消費する。
+     *
+     * まだクールダウン中なら false を返し、呼び出し側は再取得を見送る。
+     * 許可した場合はマーカーを立てて、次の呼び出しから一定時間ブロックする。
+     *
+     * @param string $baseUrl
+     * @return bool
+     */
+    private function tryConsumeForcedRefresh($baseUrl)
+    {
+        $path = $this->cachePath($baseUrl, self::COOLDOWN_PREFIX);
+        if ($path === null) {
+            // クールダウンを管理できない場合は従来どおり再取得を許可する
+            return true;
+        }
+
+        if (is_readable($path)) {
+            $raw = file_get_contents($path);
+            $decoded = $raw === false ? null : json_decode($raw, true);
+            if (is_array($decoded) && isset($decoded['expires']) && (int) $decoded['expires'] > $this->now()) {
+                $this->log('Skipping the forced EcAuth JWKS refresh; still in cooldown', array());
+
+                return false;
+            }
+        }
+
+        $payload = json_encode(array('expires' => $this->now() + self::FORCED_REFRESH_COOLDOWN));
+        if ($payload !== false) {
+            @file_put_contents($path, $payload, LOCK_EX);
+        }
+
+        return true;
     }
 
     /**
@@ -203,15 +258,20 @@ class SC_Helper_EcAuthLogin2_Jwks
 
     /**
      * @param string $baseUrl
+     * @param string|null $prefix 既定は JWKS 本体のキャッシュ
      * @return string|null
      */
-    private function cachePath($baseUrl)
+    private function cachePath($baseUrl, $prefix = null)
     {
         if ($this->cacheDir === null || !is_dir($this->cacheDir) || !is_writable($this->cacheDir)) {
             return null;
         }
 
-        return rtrim($this->cacheDir, '/') . '/' . self::CACHE_PREFIX . hash('sha256', $baseUrl) . '.json';
+        if ($prefix === null) {
+            $prefix = self::CACHE_PREFIX;
+        }
+
+        return rtrim($this->cacheDir, '/') . '/' . $prefix . hash('sha256', $baseUrl) . '.json';
     }
 
     /**

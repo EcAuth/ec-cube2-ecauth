@@ -77,6 +77,59 @@ class JwksTest extends TestCase
         self::assertCount(2, $urls);
     }
 
+    public function testRepeatedForceRefreshIsRateLimited()
+    {
+        // kid を変え続けるトークンで JWKS エンドポイントへのリクエストを
+        // 増幅できないこと（キャッシュがある限りクールダウン中は取りに行かない）
+        $urls = array();
+        $helper = $this->createHelper($urls, array(
+            array('status' => 200, 'body' => $this->jwksBody('kid-1')),
+            array('status' => 200, 'body' => $this->jwksBody('kid-2')),
+        ));
+
+        $helper->getJwks(self::BASE_URL);
+        $helper->getJwks(self::BASE_URL, true);
+        for ($i = 0; $i < 10; $i++) {
+            self::assertIsArray($helper->getJwks(self::BASE_URL, true));
+        }
+
+        // 初回取得 + 1 回目の強制再取得のみ。以降はクールダウンで抑制される
+        self::assertCount(2, $urls);
+    }
+
+    public function testForceRefreshIsAllowedAfterCooldownExpires()
+    {
+        $urls = array();
+        $helper = $this->createHelper($urls, array(
+            array('status' => 200, 'body' => $this->jwksBody('kid-1')),
+            array('status' => 200, 'body' => $this->jwksBody('kid-2')),
+            array('status' => 200, 'body' => $this->jwksBody('kid-3')),
+        ));
+
+        $helper->getJwks(self::BASE_URL);
+        $helper->getJwks(self::BASE_URL, true);
+        $helper->getJwks(self::BASE_URL, true);
+        self::assertCount(2, $urls);
+
+        $helper->advanceClock(SC_Helper_EcAuthLogin2_Jwks::FORCED_REFRESH_COOLDOWN + 1);
+        $refreshed = $helper->getJwks(self::BASE_URL, true);
+
+        self::assertSame('kid-3', $refreshed[0]['kid']);
+        self::assertCount(3, $urls);
+    }
+
+    public function testForceRefreshIsAllowedWhenNothingIsCached()
+    {
+        // キャッシュが無ければ返せるものが無いので、クールダウンより取得を優先する
+        $urls = array();
+        $helper = $this->createHelper($urls, array(
+            array('status' => 200, 'body' => $this->jwksBody('kid-1')),
+        ));
+
+        self::assertIsArray($helper->getJwks(self::BASE_URL, true));
+        self::assertCount(1, $urls);
+    }
+
     public function testCacheIsSeparatedPerBaseUrl()
     {
         $urls = array();
@@ -91,7 +144,7 @@ class JwksTest extends TestCase
         // テナントごとに鍵が異なるため、キャッシュが混ざってはいけない
         self::assertSame('kid-a', $a[0]['kid']);
         self::assertSame('kid-b', $b[0]['kid']);
-        self::assertCount(2, glob($this->cacheDir . '/*'));
+        self::assertCount(2, glob($this->cacheDir . '/ecauth_jwks_[0-9a-f]*'));
     }
 
     public function testExpiredCacheIsRefetched()
