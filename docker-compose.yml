@@ -52,6 +52,10 @@ services:
       ECAUTH_USERINFO_ENDPOINT: ${ECAUTH_USERINFO_ENDPOINT:-}
       ECAUTH_EXTERNAL_USERINFO_ENDPOINT: ${ECAUTH_EXTERNAL_USERINFO_ENDPOINT:-}
       ECAUTH_PROVIDER_NAME: ${ECAUTH_PROVIDER_NAME:-federate-oauth2}
+      # EcAuth Base URL として許可するホスト（カンマ区切り）。既定は ec-auth.io の
+      # サブドメインのみのため、開発・ステージングの Azure ホストを明示的に足す。
+      # 未設定だと dev / staging の EcAuth を設定できず、パスキーログインが通らない。
+      ECAUTH_ALLOWED_HOSTS: ${ECAUTH_ALLOWED_HOSTS:-.ec-auth.io,.azurewebsites.net}
       # CI 用フラグ（docker-entrypoint.sh が読む）
       # SKIP_PLUGIN_INSTALL=true で entrypoint のプラグイン CLI 自動インストールを抑止し、
       # Web インストール経路のテスト（e2e-web-install.yml）を可能にする

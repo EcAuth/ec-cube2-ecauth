@@ -20,6 +20,19 @@
  *
  * @package EcAuthLogin2
  */
+
+// EC-CUBE 2 はプラグインのクラスを自動ロードしないため、依存クラスを明示的に読み込む。
+// ユニットテストでは composer の classmap 経由で既にロード済みなので class_exists で分岐する。
+if (!class_exists('SC_Helper_EcAuthLogin2_BaseUrl')) {
+    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_BaseUrl.php';
+}
+if (!class_exists('SC_Helper_EcAuthLogin2_IdToken')) {
+    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_IdToken.php';
+}
+if (!class_exists('SC_Helper_EcAuthLogin2_Jwks')) {
+    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_Jwks.php';
+}
+
 class SC_Helper_EcAuthLogin2
 {
     /** @var string プラグインコード */
@@ -653,43 +666,98 @@ class SC_Helper_EcAuthLogin2
     }
 
     /**
-     * id_token (JWT) ペイロードから sub を取り出す。
+     * id_token (JWT) を検証し、sub を取り出す。
      *
-     * 暗号署名は意図的に検証していない。これは OIDC Core 3.1.3.7.6 が許容する
-     * "back-channel direct communication via TLS" 経路で id_token を取得しているため:
+     * sub はこの後 dtb_member の引き当てと管理者セッション確立に直結するため、
+     * 署名・iss・aud・exp をすべて検証してからでなければ採用してはいけない
+     * （EcAuthDocs #101）。
      *
-     *   - 取得元: POST /v1/token (HTTPS, client_id + client_secret 認証)
-     *   - サーバー間直接通信なので TLS server validation が issuer validation を兼ねる
-     *
-     * 仕様引用 (OIDC Core 3.1.3.7.6):
-     *   "If the ID Token is received via direct communication between the Client
-     *    and the Token Endpoint, the TLS server validation MAY be used to validate
-     *    the issuer in place of checking the token signature."
-     *
-     * リファレンス: ec-cube4-ecauth の PasskeyAuthService::extractSubFromIdToken と
-     * 同等の方針。
-     *
-     * 防御深化として JWKS による署名検証 (firebase/php-jwt 等) を導入する余地は
-     * あるが、4 系・2 系横断で整合させる必要があるため別タスク扱い。
+     * 以前は OIDC Core 3.1.3.7.6 の "back-channel direct communication via TLS"
+     * 例外を根拠に署名検証を省いていたが、その例外は「トークンエンドポイントが
+     * 信頼できる」ことが前提であり、Base URL が無検証で採用される限り成立しない。
+     * Base URL の許可リストと署名検証は対で機能する。
      *
      * @param string $idToken
-     * @return string|null
+     * @return string|null 検証に成功した場合の sub、失敗時は null
      */
     public function extractSubFromIdToken($idToken)
     {
-        $parts = explode('.', $idToken);
-        if (count($parts) !== 3) {
-            return null;
-        }
-        $payload = json_decode($this->base64UrlDecode($parts[1]), true);
-        if (!is_array($payload) || empty($payload['sub'])) {
-            return null;
-        }
-        if (isset($payload['exp']) && $payload['exp'] < time()) {
+        $baseUrl = $this->getEcAuthBaseUrl();
+        if ($baseUrl === '') {
+            $this->logSafely('EcAuth Base URL is not allowed; refusing to verify ID token', array());
+
             return null;
         }
 
-        return $payload['sub'];
+        $config = $this->getConfig();
+        $clientId = isset($config['client_id']) ? (string) $config['client_id'] : '';
+
+        $payload = $this->createIdTokenVerifier($baseUrl)->verify($idToken, $baseUrl, $clientId);
+        if ($payload === null) {
+            return null;
+        }
+
+        return (string) $payload['sub'];
+    }
+
+    /**
+     * id_token 検証器を組み立てる。
+     *
+     * JWKS の取得は curl / ファイルキャッシュに依存するため、ここで結線して
+     * 検証ロジック本体 (SC_Helper_EcAuthLogin2_IdToken) は I/O から切り離しておく。
+     *
+     * @param string $baseUrl 許可リストを通過済みの Base URL
+     * @return SC_Helper_EcAuthLogin2_IdToken
+     */
+    protected function createIdTokenVerifier($baseUrl)
+    {
+        $self = $this;
+        $jwksHelper = new SC_Helper_EcAuthLogin2_Jwks(
+            function ($url) use ($self) {
+                return $self->fetchPublicJson($url);
+            },
+            null,
+            function ($message, $context) use ($self) {
+                $self->logPublic($message, $context);
+            }
+        );
+
+        return new SC_Helper_EcAuthLogin2_IdToken(
+            function ($forceRefresh) use ($jwksHelper, $baseUrl) {
+                return $jwksHelper->getJwks($baseUrl, $forceRefresh);
+            },
+            function ($message, $context) use ($self) {
+                $self->logPublic($message, $context);
+            }
+        );
+    }
+
+    /**
+     * 認証不要の JSON エンドポイントを GET する（JWKS 取得用）。
+     *
+     * SC_Helper_EcAuthLogin2_Jwks から callable 経由で呼ばれるため public にしている。
+     * 直接呼び出すことは想定していない。
+     *
+     * @param string $url
+     * @return array{status: int, body: string|false}
+     */
+    public function fetchPublicJson($url)
+    {
+        $statusCode = 0;
+        $body = $this->httpRequest('GET', $url, array('Accept: application/json'), null, $statusCode);
+
+        return array('status' => $statusCode, 'body' => $body);
+    }
+
+    /**
+     * ログ出力を callable 経由で使えるようにするためのラッパー。
+     *
+     * @param string $message
+     * @return void
+     */
+    public function logPublic($message, array $context)
+    {
+        $this->logSafely($message, $context);
     }
 
     /**
@@ -771,11 +839,32 @@ class SC_Helper_EcAuthLogin2
         return isset($config['client_secret']) ? (string) $config['client_secret'] : '';
     }
 
+    /**
+     * 許可リストを通った Base URL のみを返す。許可されない場合は空文字を返し、
+     * 呼び出し側でリクエストを中止させる。
+     *
+     * 設定画面での保存時にも検証しているが、DB を直接書き換えられた場合や
+     * 許可リストを狭めた後に古い値が残っている場合に備え、実行時にも再検証する
+     * （EcAuthDocs #101）。
+     *
+     * @return string
+     */
     private function getEcAuthBaseUrl()
     {
         $config = $this->getConfig();
+        if (!isset($config['ecauth_base_url'])) {
+            return '';
+        }
 
-        return isset($config['ecauth_base_url']) ? rtrim((string) $config['ecauth_base_url'], '/') : '';
+        $validator = new SC_Helper_EcAuthLogin2_BaseUrl();
+        $baseUrl = $validator->normalize($config['ecauth_base_url']);
+        if ($baseUrl === null) {
+            $this->logSafely('EcAuth Base URL is not allowed', array());
+
+            return '';
+        }
+
+        return $baseUrl;
     }
 
     private function buildEcAuthUrl($path)

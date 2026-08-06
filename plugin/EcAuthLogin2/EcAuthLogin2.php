@@ -33,6 +33,14 @@ class EcAuthLogin2
         // 共通ヘルパー
         'data/class/helper/SC_Helper_EcAuthLogin2.php'
             => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2.php',
+        // id_token 検証まわり（EcAuthDocs #101）。SC_Helper_EcAuthLogin2 が
+        // require_once するため、コピー漏れがあると認証が丸ごと落ちる。
+        'data/class/helper/SC_Helper_EcAuthLogin2_BaseUrl.php'
+            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_BaseUrl.php',
+        'data/class/helper/SC_Helper_EcAuthLogin2_IdToken.php'
+            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_IdToken.php',
+        'data/class/helper/SC_Helper_EcAuthLogin2_Jwks.php'
+            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_Jwks.php',
 
         // B2C ソーシャルログイン用ページクラス
         'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php'

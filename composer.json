@@ -38,11 +38,17 @@
             "url": "https://github.com/EC-CUBE/ec-cube2"
         }
     ],
+    "autoload-dev": {
+        "psr-4": {
+            "EcAuthLogin2\\Tests\\": "tests/"
+        }
+    },
     "scripts": {
         "phpstan": "phpstan analyse",
         "rector": "rector process --dry-run",
         "rector:fix": "rector process",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
-        "cs-fix": "php-cs-fixer fix"
+        "cs-fix": "php-cs-fixer fix",
+        "phpunit": "phpunit --configuration phpunit.xml.dist"
     }
 }
