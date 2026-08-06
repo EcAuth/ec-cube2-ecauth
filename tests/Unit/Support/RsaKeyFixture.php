@@ -134,4 +134,38 @@ class RsaKeyFixture
     {
         return rtrim(strtr(base64_encode($raw), '+/', '-_'), '=');
     }
+
+    /**
+     * @param string $input
+     * @return string
+     */
+    public static function base64UrlDecode($input)
+    {
+        $remainder = strlen($input) % 4;
+        if ($remainder !== 0) {
+            $input .= str_repeat('=', 4 - $remainder);
+        }
+
+        return (string) base64_decode(strtr($input, '-_', '+/'), true);
+    }
+
+    /**
+     * 署名バイト列の先頭 1 バイトを反転させた JWT を返す。
+     *
+     * base64url 文字列の末尾 1 文字を書き換える方法だと、末尾文字が持つ
+     * パディングビットしか変わらずデコード結果が同一になる場合があり、
+     * 署名が有効なままになってしまう（PHP バージョンや鍵によって再現が変わる）。
+     * バイト列側を確実に変える。
+     *
+     * @param string $token
+     * @return string
+     */
+    public static function tamperSignature($token)
+    {
+        $parts = explode('.', $token);
+        $signature = self::base64UrlDecode($parts[2]);
+        $signature[0] = chr(ord($signature[0]) ^ 0xff);
+
+        return $parts[0] . '.' . $parts[1] . '.' . self::base64UrlEncode($signature);
+    }
 }
