@@ -10,34 +10,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create plugin package
+      # 配布アーカイブの組み立ては tools/build-archive.sh に一本化する。
+      # ここで cp を並べ直すと、プラグインにファイルを追加したときに
+      # 追従漏れが起きる（実際、旧実装は現在のディレクトリ構成に追従できて
+      # おらず、存在しないパスを cp しようとして失敗する状態だった）。
+      - name: Build plugin archive
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
-          mkdir -p dist/EcAuthLogin2
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          plugin_version=$(grep -oE "PLUGIN_VERSION\s*=\s*'[^']+'" plugin/EcAuthLogin2/plugin_info.php | sed -E "s/.*'([^']+)'/\1/")
 
-          # プラグイン本体
-          cp -r plugin/EcAuthLogin2/* dist/EcAuthLogin2/
+          # タグと plugin_info.php の宣言バージョンがずれたまま公開すると、
+          # オーナーズストア側で表示されるバージョンと中身が食い違う。
+          if [ "$version" != "$plugin_version" ]; then
+            echo "::error::Tag ($version) does not match PLUGIN_VERSION in plugin_info.php ($plugin_version)" >&2
+            exit 1
+          fi
 
-          # クラスファイル
-          mkdir -p dist/EcAuthLogin2/data/class/helper
-          mkdir -p dist/EcAuthLogin2/data/class/pages/ecauth
-          cp data/class/helper/SC_Helper_EcAuth.php dist/EcAuthLogin2/data/class/helper/
-          cp data/class/pages/ecauth/LC_Page_EcAuth_Callback.php dist/EcAuthLogin2/data/class/pages/ecauth/
-
-          # 拡張クラスファイル
-          mkdir -p dist/EcAuthLogin2/data/class_extends/page_extends/ecauth
-          cp data/class_extends/page_extends/ecauth/LC_Page_EcAuth_Callback_Ex.php dist/EcAuthLogin2/data/class_extends/page_extends/ecauth/
-
-          # HTMLファイル
-          mkdir -p dist/EcAuthLogin2/html/ecauth
-          cp html/ecauth/callback.php dist/EcAuthLogin2/html/ecauth/
-
-          # テンプレートファイル
-          mkdir -p dist/EcAuthLogin2/data/Smarty/templates/default/ecauth
-          cp data/Smarty/templates/default/ecauth/*.tpl dist/EcAuthLogin2/data/Smarty/templates/default/ecauth/
-
-          # パッケージ作成
-          cd dist
-          tar -czvf EcAuthLogin2-${{ github.ref_name }}.tar.gz EcAuthLogin2
+          ./tools/build-archive.sh "dist/EcAuthLogin2-${TAG_NAME}.tar.gz"
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
