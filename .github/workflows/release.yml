@@ -8,7 +8,7 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 配布アーカイブの組み立ては tools/build-archive.sh に一本化する。
       # ここで cp を並べ直すと、プラグインにファイルを追加したときに
@@ -32,6 +32,6 @@ jobs:
           ./tools/build-archive.sh "dist/EcAuthLogin2-${TAG_NAME}.tar.gz"
 
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/EcAuthLogin2-${{ github.ref_name }}.tar.gz
