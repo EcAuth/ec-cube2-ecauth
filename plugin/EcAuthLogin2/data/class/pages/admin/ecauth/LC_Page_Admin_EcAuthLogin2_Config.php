@@ -43,6 +43,15 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
         $this->tpl_mainno = 'ownersstore';
         $this->tpl_maintitle = 'プラグイン';
         $this->tpl_subtitle = 'EcAuthLogin2 設定';
+
+        // この画面はプラグイン管理から eccube.openWindow(..., 615, 400) で開かれる
+        // ポップアップ。LC_Page_Admin::init() の既定は MAIN_FRAME だが、
+        // 管理画面フレームは #contents 1000px / #navi-wrap 1030px の固定幅で
+        // 615px には収まらない。EC-CUBE はポップアップ用の軽量レイアウト
+        // (admin_popup_header.tpl / admin_popup_footer.tpl、#popup-container は 560px)
+        // を持っているので、そちらをテンプレート側で include して使う。
+        // setTemplate() でフレームを介さずこのテンプレートを直接描画させる。
+        $this->setTemplate($this->tpl_mainpage);
     }
 
     public function process()

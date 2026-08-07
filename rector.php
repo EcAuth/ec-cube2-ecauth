@@ -14,7 +14,9 @@ return static function (RectorConfig $rectorConfig): void {
         __DIR__ . '/vendor',
     ]);
 
-    // PHP 5.6 互換を維持
+    // Rector が生成してよい構文の上限。実際の動作下限は PHP 7.1
+    // （ヘルパー各クラスがクラス定数の可視性修飾子を使うため）だが、
+    // 上限を低く抑えておく分には安全なのでこの値のままにしている。
     $rectorConfig->phpVersion(\Rector\ValueObject\PhpVersion::PHP_56);
 
     // コード品質向上ルール

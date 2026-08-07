@@ -14,6 +14,9 @@ defined('CLASS_REALDIR') || define('CLASS_REALDIR', '');
 defined('CLASS_EX_REALDIR') || define('CLASS_EX_REALDIR', '');
 defined('PLUGIN_UPLOAD_REALDIR') || define('PLUGIN_UPLOAD_REALDIR', '');
 defined('PLUGIN_HTML_REALDIR') || define('PLUGIN_HTML_REALDIR', '');
+// アップデート用の一時展開先。plugin_update.php が参照する
+// （実値は data/downloads/tmp/plugin_update/）。
+defined('DOWNLOADS_TEMP_PLUGIN_UPDATE_DIR') || define('DOWNLOADS_TEMP_PLUGIN_UPDATE_DIR', '');
 defined('PLUGIN_HTML_URLPATH') || define('PLUGIN_HTML_URLPATH', '');
 defined('TEMPLATE_REALDIR') || define('TEMPLATE_REALDIR', '');
 defined('SMARTY_TEMPLATES_REALDIR') || define('SMARTY_TEMPLATES_REALDIR', '');
