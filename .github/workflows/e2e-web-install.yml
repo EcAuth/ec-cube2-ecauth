@@ -1,8 +1,10 @@
-name: E2E (Web Install)
+name: E2E (Web Install / Update)
 
 # tar.gz をビルドし、SKIP_PLUGIN_INSTALL=true で素の EC-CUBE 2 を起動した上で
-# 管理画面「オーナーズストア > プラグインを追加する」経由のインストールを E2E 検証する。
-# このワークフローが通っている = 本番と同じ Web インストール経路で動く保証。
+# 管理画面「オーナーズストア」経由の 2 つの経路を E2E 検証する。
+#   - e2e-web-install: 「プラグインを追加する」からの新規インストール
+#   - e2e-web-update : 「アップデート」からの上書き更新
+# このワークフローが通っている = 本番と同じ経路で動く保証。
 
 on:
   push:
@@ -117,6 +119,121 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-failure-artifacts
+          path: |
+            test-results/
+            playwright-report/
+            docker-compose.log
+
+  # ------------------------------------------------------------------
+  # アップデート経路（管理画面「アップデート」からの tar.gz 投入）。
+  #
+  # インストール経路と違い、EC-CUBE 本体は展開先から先のファイル配置を
+  # 一切やってくれない（LC_Page_Admin_OwnersStore::updatePlugin は
+  # plugin_update.php を呼ぶだけ）。配置とキャッシュ破棄はプラグイン側の
+  # 責任なので、実際に動く経路として毎回検証する。
+  # ------------------------------------------------------------------
+  e2e-web-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build base (old) and current archives
+        run: |
+          set -euo pipefail
+          chmod +x tools/build-archive.sh
+          # アップデート元となる「旧バージョン」は、公開済みリリースを取りに行かず
+          # 現在のソースからバージョン番号だけ下げて作る。公開物に依存すると
+          # そのリリースを取り下げただけで CI が壊れるうえ、ここで検証したいのは
+          # 「アップデート経路が機能すること」なので現行ソースで足りる。
+          cp plugin/EcAuthLogin2/plugin_info.php "$RUNNER_TEMP/plugin_info.php.orig"
+          sed -i 's/\$PLUGIN_VERSION = '\''[^'\'']*'\''/\$PLUGIN_VERSION = '\''0.0.0-base'\''/' \
+            plugin/EcAuthLogin2/plugin_info.php
+          grep -n "PLUGIN_VERSION" plugin/EcAuthLogin2/plugin_info.php
+          ./tools/build-archive.sh "$PWD/dist/EcAuthLogin2-base.tar.gz" > /dev/null
+
+          # 現行バージョンに戻してからアップデート用をビルドする
+          cp "$RUNNER_TEMP/plugin_info.php.orig" plugin/EcAuthLogin2/plugin_info.php
+          ./tools/build-archive.sh > /dev/null
+          ls -la dist/
+
+      - name: Generate randomized ADMIN_DIR
+        run: |
+          ADMIN_DIR="admin_$(openssl rand -hex 6)/"
+          echo "ADMIN_DIR=${ADMIN_DIR}" >> "$GITHUB_ENV"
+          echo "ECCUBE_ADMIN_BASE=/${ADMIN_DIR}" >> "$GITHUB_ENV"
+
+      - name: Start EC-CUBE 2 without auto plugin install
+        env:
+          SKIP_PLUGIN_INSTALL: 'true'
+          ADMIN_DIR: ${{ env.ADMIN_DIR }}
+        run: |
+          docker compose up -d --build
+          ready=false
+          for i in $(seq 1 60); do
+            if curl -sk "https://localhost:8081/" >/dev/null 2>&1; then
+              echo "EC-CUBE is up"
+              ready=true
+              break
+            fi
+            echo "Waiting for EC-CUBE... ($i/60)"
+            sleep 2
+          done
+          if [ "$ready" != "true" ]; then
+            echo "EC-CUBE did not become ready in time" >&2
+            docker compose logs ec-cube --tail 100 || true
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run web-update E2E
+        env:
+          ECCUBE_BASE_URL: 'https://localhost:8081'
+          ECCUBE_ADMIN_BASE: ${{ env.ECCUBE_ADMIN_BASE }}
+          ECCUBE_ADMIN_LOGIN_ID: admin
+          ECCUBE_ADMIN_PASSWORD: password
+          ECCUBE_BASE_ARCHIVE: dist/EcAuthLogin2-base.tar.gz
+        run: npx playwright test tests/web-update.spec.ts --reporter=list
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker compose logs --no-color > docker-compose.log || true
+
+      - name: Dump plugin state on failure
+        if: failure()
+        timeout-minutes: 2
+        run: |
+          run_step() {
+            local label="$1"
+            shift
+            echo "=== ${label} ==="
+            timeout 15 "$@" 2>&1 || echo "[step '${label}' timed out or failed]"
+          }
+          run_step "dtb_plugin" docker compose exec -T postgres psql -U eccube_db_user -d eccube_db -c \
+            "SELECT plugin_id, plugin_code, plugin_version, compliant_version, enable FROM dtb_plugin ORDER BY plugin_id;"
+          run_step "data/downloads/plugin/EcAuthLogin2/" docker compose exec -T ec-cube ls -la /var/www/app/data/downloads/plugin/EcAuthLogin2/
+          run_step "data/class/helper/" docker compose exec -T ec-cube sh -c 'ls -la /var/www/app/data/class/helper/ | grep EcAuth'
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-web-update-failure-artifacts
           path: |
             test-results/
             playwright-report/

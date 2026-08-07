@@ -4,7 +4,7 @@
  * EcAuthLogin2 プラグイン情報クラス
  *
  * @package EcAuthLogin2
- * @version 1.0.0
+ * @version 1.0.1
  */
 class plugin_info
 {
@@ -18,10 +18,21 @@ class plugin_info
     public static $CLASS_NAME = 'EcAuthLogin2';
 
     /** プラグインバージョン（必須）：プラグインのバージョン */
-    public static $PLUGIN_VERSION = '1.0.0';
+    public static $PLUGIN_VERSION = '1.0.1';
 
-    /** 対応バージョン（必須）：対応するEC-CUBEバージョン */
-    public static $COMPLIANT_VERSION = '2.13.0';
+    /**
+     * 対応バージョン（必須）：対応するEC-CUBEバージョン
+     *
+     * 本体側では互換性判定に使われず、プラグイン管理画面の
+     * 「対応EC-CUBEバージョン」表示に出るだけの自由記述
+     * （@see data/Smarty/templates/admin/ownersstore/plugin.tpl）。
+     *
+     * 2.13 を含めないのは、本プラグインが PHP 7.1 以降でしか動かないため。
+     * ヘルパー各クラスがクラス定数の可視性修飾子（`public const` /
+     * `private const`、PHP 7.1 で導入）を使っており、2.13 がサポートする
+     * PHP 5.3〜5.6 では読み込み時に Parse error になる。
+     */
+    public static $COMPLIANT_VERSION = '2.17 / 2.25';
 
     /** 作者（必須）：プラグイン作者 */
     public static $AUTHOR = 'EcAuth';
@@ -29,11 +40,16 @@ class plugin_info
     /** 説明（必須）：プラグインの説明 */
     public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインと、フロントの B2C ソーシャルログイン（Google / LINE / Facebook 等）を提供します。';
 
-    /** プラグインURL：プラグインの説明ページなど */
-    public static $PLUGIN_SITE_URL = 'https://github.com/EcAuth/ec-cube2-ecauth';
+    /**
+     * プラグインURL：プラグインの説明ページなど
+     *
+     * プラグイン管理画面ではプラグイン名のリンク先になる。ショップ運営者が
+     * 開くリンクなので、開発者向けの GitHub ではなくサービスサイトへ向ける。
+     */
+    public static $PLUGIN_SITE_URL = 'https://ec-auth.io/';
 
     /** プラグイン作者URL：作者のサイトURL */
-    public static $AUTHOR_SITE_URL = 'https://github.com/EcAuth';
+    public static $AUTHOR_SITE_URL = 'https://ec-auth.io/';
 
     /** フックポイント：フックポイントとコールバック関数を定義 */
     public static $HOOK_POINTS = array(

@@ -7,7 +7,48 @@
  * License as published by the Free Software Foundation; either
  * version 2.1 of the License, or (at your option) any later version.
  *}-->
-<div id="ownersstore" class="contents-main">
+<!--{*
+ * この画面は プラグイン管理 > 「プラグイン設定」から
+ *   eccube.openWindow('../load_plugin_config.php?plugin_id=N', 'load', 615, 400)
+ * で開かれるポップアップ。615x400 は EC-CUBE 本体
+ * (admin/ownersstore/plugin.tpl) のハードコードで変更できない。
+ *
+ * 通常の管理画面フレーム (MAIN_FRAME) は #contents が 1000px、
+ * #navi-wrap が 1030px の固定幅で、この幅にはそもそも収まらない。
+ * EC-CUBE はポップアップ用に専用レイアウトを持っており
+ * (#popup-container が 560px)、そちらを使うのが本来の作り。
+ * LC_Page_Admin_EcAuthLogin2_Config::init() が setTemplate() で
+ * このテンプレートを直接描画するようにしているため、
+ * ヘッダ／フッタはここで include する。
+ *}-->
+<!--{include file="`$smarty.const.TEMPLATE_ADMIN_REALDIR`admin_popup_header.tpl"}-->
+
+<style>
+/* #popup-container は 560px。size="60" の input はそのままだとセルを
+   押し広げて横スクロールを生むので、セル幅に追従させる。 */
+.ecauth-config table.list {
+    width: 100%;
+    table-layout: fixed;
+}
+.ecauth-config table.list th {
+    width: 34%;
+    word-break: break-word;
+}
+.ecauth-config table.list td {
+    word-break: break-word;
+}
+.ecauth-config input[type="text"],
+.ecauth-config input[type="password"],
+.ecauth-config input[type="url"] {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.ecauth-config .card {
+    overflow-wrap: break-word;
+}
+</style>
+<div class="ecauth-config">
     <h2>EcAuth Login プラグイン設定</h2>
 
     <!--{if $arrErr}-->
@@ -95,9 +136,11 @@
     <div class="card" style="margin-top: 2em; padding: 1em; background: #f8f9fa; border-radius: 4px;">
         <h3>次のステップ</h3>
         <p>接続設定が完了しました。続けて管理者用のパスキーを登録すると、管理画面にパスキーでログインできるようになります。</p>
-        <a class="btn-action" href="<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/passkey.php">
+        <a class="btn-action" href="<!--{$smarty.const.HTTPS_URL}--><!--{$smarty.const.ADMIN_DIR}-->ecauth/passkey.php" target="_blank" rel="noopener">
             パスキーを登録する
         </a>
     </div>
     <!--{/if}-->
 </div>
+
+<!--{include file="`$smarty.const.TEMPLATE_ADMIN_REALDIR`admin_popup_footer.tpl"}-->

@@ -5,8 +5,12 @@ B2B パスキー（管理画面ログイン）と B2C ソーシャルログイ�
 
 ## 対応バージョン
 
-- EC-CUBE 2.13, 2.17, 2.25
+- EC-CUBE 2.17, 2.25
 - PHP 7.4+ (8.x 動作確認)
+
+> EC-CUBE 2.13 は対象外。ヘルパー各クラスがクラス定数の可視性修飾子
+> (`public const` / `private const`、PHP 7.1 で導入) を使っており、
+> 2.13 がサポートする PHP 5.3〜5.6 では読み込み時に Parse error になる。
 - PostgreSQL / MySQL
 
 ## 機能

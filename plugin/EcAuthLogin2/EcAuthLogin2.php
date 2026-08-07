@@ -28,60 +28,21 @@ class EcAuthLogin2
     /** @var array プラグイン情報 */
     protected $arrSelfInfo;
 
-    /** @var array<string,string> [プラグイン内パス => コピー先絶対パス] */
-    protected static $fileMap = array(
-        // 共通ヘルパー
-        'data/class/helper/SC_Helper_EcAuthLogin2.php'
-            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2.php',
-        // id_token 検証まわり（EcAuthDocs #101）。SC_Helper_EcAuthLogin2 が
-        // require_once するため、コピー漏れがあると認証が丸ごと落ちる。
-        'data/class/helper/SC_Helper_EcAuthLogin2_BaseUrl.php'
-            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_BaseUrl.php',
-        'data/class/helper/SC_Helper_EcAuthLogin2_IdToken.php'
-            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_IdToken.php',
-        'data/class/helper/SC_Helper_EcAuthLogin2_Jwks.php'
-            => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_Jwks.php',
-
-        // B2C ソーシャルログイン用ページクラス
-        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php'
-            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php',
-        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Callback.php'
-            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Callback.php',
-
-        // B2B 管理画面ページクラス
-        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php'
-            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php',
-        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php'
-            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php',
-        'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php'
-            => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php',
-        'data/class/pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php'
-            => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php',
-
-        // B2C ソーシャルログイン用エントリポイント
-        'html/ecauth/authorize.php' => 'HTML_REALDIR:ecauth/authorize.php',
-        'html/ecauth/callback.php' => 'HTML_REALDIR:ecauth/callback.php',
-
-        // B2B パスキー認証 API（フロント側、認証不要）
-        'html/ecauth/passkey/authenticate-options.php'
-            => 'HTML_REALDIR:ecauth/passkey/authenticate-options.php',
-        'html/ecauth/passkey/authenticate-verify.php'
-            => 'HTML_REALDIR:ecauth/passkey/authenticate-verify.php',
-
-        // B2B パスキー登録 API（管理画面、管理者認証必須）
-        'html/admin/ecauth/passkey.php' => 'ADMIN_HTML_REALDIR:ecauth/passkey.php',
-        'html/admin/ecauth/api/verify-password.php'
-            => 'ADMIN_HTML_REALDIR:ecauth/api/verify-password.php',
-        'html/admin/ecauth/api/register-options.php'
-            => 'ADMIN_HTML_REALDIR:ecauth/api/register-options.php',
-        'html/admin/ecauth/api/register-verify.php'
-            => 'ADMIN_HTML_REALDIR:ecauth/api/register-verify.php',
-
-        // 管理画面プラグイン管理「設定」リンクは
-        // PLUGIN_UPLOAD_REALDIR/<PLUGIN_CODE>/config.php （= プラグインルートの config.php）
-        // を直接 require_once する仕様のため、ファイルコピーは不要。
-        // tar.gz に config.php が含まれていれば設定リンクが自動的に有効になる。
-    );
+    /**
+     * ファイル配置表を取得する。
+     *
+     * 定義の実体は filemap.php にある。static プロパティに直接持たせないのは、
+     * アップデート経路（plugin_update.php）が「新バージョンの配置表」を
+     * 読めるようにするため。有効なプラグインのクラスファイルは
+     * SC_Helper_Plugin::load() がリクエスト冒頭で require_once 済みで、
+     * アップデート中に新しい EcAuthLogin2.php を読み直すことはできない。
+     *
+     * @return array<string,string> [プラグイン内パス => コピー先指定]
+     */
+    public static function getFileMap()
+    {
+        return require __DIR__.'/filemap.php';
+    }
 
     public function __construct(array $arrSelfInfo)
     {
@@ -440,7 +401,7 @@ class EcAuthLogin2
     {
         $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
 
-        foreach (self::$fileMap as $relativeSrc => $destSpec) {
+        foreach (self::getFileMap() as $relativeSrc => $destSpec) {
             $src = $base . $relativeSrc;
             $dest = $this->expandDestSpec($destSpec);
             if (!is_file($src)) {
@@ -464,7 +425,7 @@ class EcAuthLogin2
 
     protected function removePluginFiles()
     {
-        foreach (self::$fileMap as $destSpec) {
+        foreach (self::getFileMap() as $destSpec) {
             $dest = $this->expandDestSpec($destSpec);
             if (is_file($dest)) {
                 @unlink($dest);
