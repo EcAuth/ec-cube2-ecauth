@@ -71,6 +71,12 @@ return array(
     'html/admin/ecauth/api/register-verify.php'
         => 'ADMIN_HTML_REALDIR:ecauth/api/register-verify.php',
 
+    // プラグイン管理画面に表示されるロゴ（縦 65 x 横 65 ピクセル）。
+    // PLUGIN_HTML_REALDIR は html/plugin/ までしか指さないため、プラグインコードの
+    // ディレクトリを自分で付ける必要がある。
+    // @see EC-CUBE プラグイン開発マニュアル「3-2 プラグインファイル構成 / logo.png」
+    'logo.png' => 'PLUGIN_HTML_REALDIR:EcAuthLogin2/logo.png',
+
     // 管理画面プラグイン管理「設定」リンクは
     // PLUGIN_UPLOAD_REALDIR/<PLUGIN_CODE>/config.php （= プラグインルートの config.php）
     // を直接 require_once する仕様のため、ファイルコピーは不要。

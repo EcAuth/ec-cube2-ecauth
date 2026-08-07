@@ -43,9 +43,12 @@ class LC_Page_Admin_EcAuthLogin2_Passkey extends LC_Page_Admin_Ex
     {
         parent::init();
         $this->tpl_mainpage = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/templates/admin/plg_EcAuthLogin2_admin_passkey_list.tpl';
-        $this->tpl_mainno = 'ownersstore';
+        // メニューは「基本情報管理」配下に置く（@see EcAuthLogin2::insertBasisSubnaviMenu()）。
+        // ownersstore のままだと、本体 CSS が .authority_1 で #navi-ownersstore を隠すため、
+        // 店舗オーナーが開いたときにハイライト先が非表示要素になる。
+        $this->tpl_mainno = 'basis';
         $this->tpl_subno = 'ecauth_login2_passkey';
-        $this->tpl_maintitle = 'プラグイン';
+        $this->tpl_maintitle = '基本情報管理';
         $this->tpl_subtitle = 'パスキー管理';
     }
 
@@ -72,7 +75,7 @@ class LC_Page_Admin_EcAuthLogin2_Passkey extends LC_Page_Admin_Ex
         } else {
             $result = $objHelper->listPasskeys($accessToken);
             if ($result['status'] === 200 && isset($result['data']['passkeys'])) {
-                $this->passkeys = $result['data']['passkeys'];
+                $this->passkeys = $this->formatPasskeyDates($result['data']['passkeys']);
             } else {
                 $this->error_message = 'パスキー一覧の取得に失敗しました。EcAuth の設定を確認してください。';
             }
@@ -90,6 +93,65 @@ class LC_Page_Admin_EcAuthLogin2_Passkey extends LC_Page_Admin_Ex
         // バージョンを上げる際は新版でこれらの仕様が維持されていることを確認すること。
         $this->ecauth_auth_js_url = 'https://cdn.ec-auth.io/auth-js/0.1.3/ecauth-auth.umd.js';
         $this->csrf_token = SC_Helper_Session_Ex::getToken();
+    }
+
+    /**
+     * パスキー一覧の日時項目を表示用に整形する。
+     *
+     * EcAuth API は created_at / last_used_at を ISO 8601（UTC、例 2026-08-07T09:53:16+00:00）で
+     * 返す。そのまま出すと管理者に UTC の機械可読値が見えてしまうため、EC-CUBE のタイムゾーンに
+     * 変換して "Y-m-d H:i:s" にする。
+     *
+     * @param  array $passkeys EcAuth API のレスポンス（passkeys 配列）
+     * @return array 日時項目を整形した配列
+     */
+    protected function formatPasskeyDates($passkeys)
+    {
+        if (!is_array($passkeys)) {
+            return array();
+        }
+
+        foreach ($passkeys as &$passkey) {
+            if (!is_array($passkey)) {
+                continue;
+            }
+            foreach (array('created_at', 'last_used_at') as $key) {
+                if (isset($passkey[$key])) {
+                    $passkey[$key] = $this->formatDateTime($passkey[$key]);
+                }
+            }
+        }
+        unset($passkey);
+
+        return $passkeys;
+    }
+
+    /**
+     * ISO 8601 の日時文字列を、EC-CUBE のタイムゾーンでの "Y-m-d H:i:s" に変換する。
+     *
+     * タイムゾーンを Asia/Tokyo と直書きせず date_default_timezone_get() を使うのは、
+     * 本体が SC_Initial::setTimezone()（data/class/SC_Initial.php）で
+     * date_default_timezone_set('Asia/Tokyo') を実行済みであり、本体設定に追従させるため。
+     *
+     * @param  string|null $value ISO 8601 文字列
+     * @return string|null 変換後の文字列。パースできない場合は入力値をそのまま返す
+     */
+    protected function formatDateTime($value)
+    {
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+
+        try {
+            $date = new DateTime($value);
+        } catch (Exception $e) {
+            // 想定外の形式でも一覧全体を落とさない。生の値を出して原因を追えるようにする。
+            return $value;
+        }
+
+        $date->setTimezone(new DateTimeZone(date_default_timezone_get()));
+
+        return $date->format('Y-m-d H:i:s');
     }
 
     /**
