@@ -187,6 +187,7 @@ class EcAuthLogin2
      * Smarty テンプレートのプレフィルタ。
      * - フロントの mypage/login.tpl と shopping/index.tpl に B2C ログインボタンを差し込む
      * - 管理画面の admin/login.tpl にパスキーログインスクリプトを差し込む（Phase B-3 で実装）
+     * - 管理画面の basis/subnavi.tpl に「パスキー管理」メニューを差し込む
      *
      * @param string $source テンプレートソース
      * @param string $filename
@@ -207,6 +208,59 @@ class EcAuthLogin2
 
             return;
         }
+
+        if ($filename === 'basis/subnavi.tpl') {
+            $this->insertBasisSubnaviMenu($source);
+
+            return;
+        }
+    }
+
+    /**
+     * 「基本情報管理」のサブナビへ「パスキー管理」を追加する。
+     *
+     * パスキー管理画面（admin/ecauth/passkey.php）への導線が、これまでプラグイン設定画面の
+     * ボタンしか無かった。設定画面は「オーナーズストア」配下にあり、本体の
+     * html/user_data/packages/admin/css/admin.css が `.authority_1` で #navi-ownersstore ごと
+     * 非表示にするため、店舗オーナー権限の管理者は自分のパスキーを登録できなかった。
+     *
+     * パスキーはログイン中の管理者ごとに登録するもの（verify-password → ensureB2BUser が
+     * dtb_member 単位で subject を発行する）なので、全権限から見える基本情報管理に置く。
+     * なお mtb_permission に /ecauth/passkey.php の登録は無く、SC_Session::IsSuccess() は
+     * 未登録パスを素通しするため、アクセス制御上は元から店舗オーナーも利用できる。
+     */
+    protected function insertBasisSubnaviMenu(&$source)
+    {
+        $tplFile = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/templates/admin/plg_EcAuthLogin2_admin_basis_subnavi.tpl';
+        if (!is_file($tplFile)) {
+            return;
+        }
+
+        $snippet = file_get_contents($tplFile);
+        if ($snippet === false || trim($snippet) === '') {
+            return;
+        }
+
+        // 挿入は SC_Helper_Transform を使う（プラグイン開発マニュアル 3-11 / 4-1 の推奨手法）。
+        // 文字列置換と違いセレクタ指定なので、本体の subnavi.tpl の項目が増減しても壊れない。
+        // Transform は挿入する断片をプレースホルダに退避して getHTML() で復元するため、
+        // 断片内の Smarty タグ（属性位置の <!--{if}--> を含む）はパースされず安全。
+        //
+        // select() の第 3 引数 $require に false を渡すのが重要。既定の true のままだと
+        // セレクタ不一致が致命的エラーとして積まれ、getHTML() が SC_Utils_Ex::sfDispSiteError()
+        // を呼ぶため、メニュー 1 項目のせいで基本情報管理の画面全体がエラー表示になる。
+        // false ならセレクタが無いとき appendChild が何もせず、getHTML() は元ソースを返す。
+        $objTransform = new SC_Helper_Transform($source);
+        $objTransform->select('ul.level1', null, false)->appendChild($snippet);
+        $transformed = $objTransform->getHTML();
+
+        // 念のため。null が返るのはエラー経路のみだが、その場合も元ソースを維持する
+        // （導線はプラグイン設定画面側に残っているので、メニューが出ないだけで済む）。
+        if (!is_string($transformed) || $transformed === '') {
+            return;
+        }
+
+        $source = $transformed;
     }
 
     /**
