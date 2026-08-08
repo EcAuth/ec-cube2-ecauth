@@ -346,8 +346,19 @@ class EcAuthLogin2
         );
 
         // </body> 直前に挿入（無い場合は末尾追加）
+        // 置換は callback 形式にする。$script は JS なので `$0` `$1` のような
+        // メタ文字を含みうるが、preg_replace の置換文字列ではそれが後方参照として
+        // 展開され、スクリプトが静かに壊れる（`$0` がマッチした </body> に化ける）。
+        // @see insertB2CLoginButton() の同じ対処
         if (stripos($source, '</body>') !== false) {
-            $source = preg_replace('/<\/body>/i', $script . "\n</body>", $source, 1);
+            $source = preg_replace_callback(
+                '/<\/body>/i',
+                function ($matches) use ($script) {
+                    return $script . "\n" . $matches[0];
+                },
+                $source,
+                1
+            );
 
             return;
         }

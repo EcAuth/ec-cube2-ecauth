@@ -35,6 +35,14 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
      */
     public $mypage_url;
 
+    /**
+     * 現在 DB に保存されている client_id。
+     * テンプレート側が「入力値と違っていたら確認ダイアログを出す」判定に使う。
+     *
+     * @var string
+     */
+    public $saved_client_id;
+
     public function init()
     {
         parent::init();
@@ -80,6 +88,12 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
 
         $this->arrForm = $objFormParam->getFormParamList();
         $this->has_client_secret = $this->loadConfigBoolean('client_secret');
+
+        // doPostMode() より後に読むこと。保存が成功していれば新しい client_id が
+        // 入るため、同じ内容を再送しても確認ダイアログが二重に出ない。
+        // 入力エラーで保存されなかった場合は旧値のままなので、再送時に正しく出る。
+        $savedConfig = $objHelper->getConfig();
+        $this->saved_client_id = isset($savedConfig['client_id']) ? (string) $savedConfig['client_id'] : '';
 
         $signupUrls = $objHelper->getSignupUrls();
         $this->signup_url = $signupUrls['signup'];
@@ -145,8 +159,55 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
             $config['client_secret'] = $newSecret;
         }
 
+        // 保存で上書きされる前に、現在の client_id を控えておく。
+        $savedConfig = $objHelper->getConfig();
+        $previousClientId = isset($savedConfig['client_id']) ? (string) $savedConfig['client_id'] : '';
+
         $objHelper->saveConfig($config);
-        $this->tpl_onload = "alert('設定を保存しました。');";
+
+        $message = '設定を保存しました。';
+        if (SC_Helper_EcAuthLogin2::shouldResetEcauthSubjects($previousClientId, $config['client_id'])) {
+            $message .= $this->handleClientIdChanged($objHelper);
+        }
+
+        $this->tpl_onload = "alert('" . $message . "');";
+    }
+
+    /**
+     * 接続先テナント（client_id）が変わったときの後始末。
+     *
+     * dtb_member.ecauth_subject は EcAuth の B2BUser.Subject と 1:1 で、
+     * EcAuth 側では Subject が Organization をまたいでグローバル一意。
+     * そのため古いテナントで発番済みの subject を残したまま client_id を
+     * 差し替えると、新しいテナントへの登録が一意制約に阻まれ
+     * register/options が必ず 400 になる（#18）。テナントを移す以上、
+     * 古い subject に紐づくパスキーはどのみち使えないのでクリアしてよい。
+     *
+     * @param SC_Helper_EcAuthLogin2 $objHelper
+     * @return string 保存完了アラートに追記するメッセージ
+     */
+    protected function handleClientIdChanged($objHelper)
+    {
+        $cleared = $objHelper->clearMemberEcauthSubjects();
+
+        // 旧テナントで取得した access_token / credential_id はもう通用しない。
+        // 残すとパスキー管理画面が不可解なエラーで一覧取得に失敗するため破棄する。
+        unset(
+            $_SESSION['ecauth_access_token'],
+            $_SESSION['ecauth_current_credential_id'],
+            $_SESSION['ecauth_register_session_id']
+        );
+
+        GC_Utils_Ex::gfPrintLog(
+            '[EcAuthLogin2] client_id changed; cleared ecauth_subject of ' . $cleared . ' member(s)'
+        );
+
+        if ($cleared === 0) {
+            return '接続先のテナントが変わりました。';
+        }
+
+        return '接続先のテナントが変わったため、登録済みのパスキー ' . $cleared
+            . ' 件分の紐付けを解除しました。パスキー管理から登録し直してください。';
     }
 
     /**

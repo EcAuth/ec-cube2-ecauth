@@ -625,6 +625,73 @@ class SC_Helper_EcAuthLogin2
     }
 
     /**
+     * 接続先テナント（client_id）の変更にともない ecauth_subject を
+     * クリアすべきかを判定する。
+     *
+     * - 初回登録（保存前の値が無い）ではクリアしない。まだどのテナントにも
+     *   subject を登録していないため。
+     * - 前後で同じならクリアしない。設定画面は client_id 以外の項目だけを
+     *   変えて保存されることの方が多い。
+     * - 前後の空白差だけの違いもクリアしない。保存側は trim 済みの値を渡すが、
+     *   旧値は trim せず保存された可能性があるため、ここでも両方 trim する。
+     *
+     * @param string|null $previousClientId 保存前の client_id
+     * @param string|null $newClientId 保存する client_id
+     * @return bool
+     */
+    public static function shouldResetEcauthSubjects($previousClientId, $newClientId)
+    {
+        $previous = trim((string) $previousClientId);
+        $new = trim((string) $newClientId);
+
+        if ($previous === '') {
+            return false;
+        }
+
+        return $previous !== $new;
+    }
+
+    /**
+     * dtb_member.ecauth_subject を一括クリアする。
+     *
+     * 接続先テナント（client_id）を変更したときに使う。ecauth_subject は
+     * EcAuth 側の B2BUser.Subject と 1:1 で、EcAuth では Subject が
+     * Organization をまたいでグローバル一意なため、古いテナントで発番した
+     * subject を新しいテナントに登録しようとすると一意制約に阻まれ、
+     * register/options が必ず 400 になる（EcAuth/ec-cube2-ecauth#18）。
+     * クリアすれば次回登録時に新しい UUID が発番され、正常に登録できる。
+     *
+     * 対象は dtb_member（B2B パスキー）のみ。dtb_customer.ecauth_subject は
+     * B2C の sub で、値を発番するのはプラグインではなく EcAuth 側であり、
+     * テナントが変われば別の sub が降ってきて衝突しないため触らない。
+     *
+     * @param SC_Query_Ex|null $objQuery 省略時はシングルトンを使う（テスト用の注入口）
+     * @return int クリアした件数
+     */
+    public function clearMemberEcauthSubjects($objQuery = null)
+    {
+        if ($objQuery === null) {
+            $objQuery = SC_Query_Ex::getSingletonInstance();
+        }
+        $count = (int) $objQuery->count('dtb_member', 'ecauth_subject IS NOT NULL');
+        if ($count === 0) {
+            return 0;
+        }
+
+        // NULL は $arrRawSql で渡す。$arrVal に null を入れると SC_Query::update() の
+        // strcasecmp('Now()', $val) に null が渡り、PHP 8.1 以降で Deprecated になる。
+        $objQuery->update(
+            'dtb_member',
+            array('update_date' => 'CURRENT_TIMESTAMP'),
+            'ecauth_subject IS NOT NULL',
+            array(),
+            array('ecauth_subject' => 'NULL')
+        );
+
+        return $count;
+    }
+
+    /**
      * EcAuth /register/options が返す user.id (base64url) を Member.ecauth_subject と
      * 突き合わせ、異なっていれば EcAuth 側の値で上書きする。
      * 詳細は ec-cube4-ecauth の PasskeyAuthService::reconcileEcauthSubjectFromOptions を参照。
