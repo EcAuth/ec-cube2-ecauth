@@ -26,6 +26,11 @@ class LC_Page_EcAuthLogin2_Authorize extends LC_Page
 {
     public function init()
     {
+        // Callback と同じ理由でページレイアウト解決を止める。
+        // このページも描画せずリダイレクトのみで終わるため、dtb_pagelayout に
+        // レコードが無く、既定のままだと E_USER_WARNING を 2 行出す。
+        // @see LC_Page_EcAuthLogin2_Callback::init()
+        $this->skip_load_page_layout = true;
         parent::init();
     }
 

@@ -37,11 +37,20 @@
         // 管理画面だけ浮いたボタンになる (実際 1.0.0 がその状態だった)。
         // 同じ <p><a class="btn-tool-format"><span> 構造を複製し、
         // スタイル指定は本体 CSS (admin.css の .btn-tool-format) に委ねる。
+        //
+        // 初回利用者向けの案内はボタンの title（ツールチップ）で出す。
+        // ログイン画面は本体テンプレートなので、常設の案内文を差し込むと
+        // レイアウトに手を入れることになり、本体の変更に追従しづらい。
+        var NO_PASSKEY_HINT = 'このアカウントで初めてパスキーを使う場合は、'
+            + 'パスワードでログインしてから「基本情報管理 → パスキー管理」で'
+            + 'パスキーを登録してください。';
+
         var passkeyBtn = document.createElement('a');
         passkeyBtn.id = 'ecauth-passkey-login';
         passkeyBtn.className = anchor.className || 'btn-tool-format';
         passkeyBtn.href = 'javascript:;';
         passkeyBtn.setAttribute('role', 'button');
+        passkeyBtn.title = NO_PASSKEY_HINT;
         var passkeyLabel = document.createElement('span');
         passkeyLabel.textContent = 'パスキーでログイン';
         passkeyBtn.appendChild(passkeyLabel);
@@ -82,7 +91,16 @@
                 alert('パスキー認証に失敗しました。');
             }).catch(function (error) {
                 setBusy(false, 'パスキーでログイン');
-                if (!error || error.name === 'NotAllowedError') { return; }
+                if (!error) { return; }
+                // NotAllowedError は「利用者がキャンセルした」場合と
+                // 「該当するパスキーが無いままタイムアウトした」場合の双方で起きる。
+                // ブラウザ API 上は区別できないため、両方に当てはまる文面で案内する。
+                // 黙って終了すると、パスキー未登録の管理者には手がかりが何も残らない。
+                if (error.name === 'NotAllowedError') {
+                    alert('パスキーが見つからないか、認証がキャンセルされました。\n\n'
+                        + NO_PASSKEY_HINT);
+                    return;
+                }
                 console.error('Passkey authentication error:', error);
                 alert('パスキー認証に失敗しました。');
             });

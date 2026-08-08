@@ -12,6 +12,7 @@
  *   2. パスキー管理画面から新規パスキー登録（ecauth_subject を JIT 生成）
  *   3. 管理画面からログアウト
  *   4. 管理ログイン画面でパスキーボタンをクリックし、コールバック経由で <ADMIN_DIR>/home.php までリダイレクトされることを検証
+ *   5. 端末側にパスキーが無い状態でボタンを押し、案内ダイアログが出ることを検証（#26）
  */
 
 import { test, expect, BrowserContext, Page, CDPSession } from '@playwright/test';
@@ -54,8 +55,8 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
     // WebAuthn の timeout=0 をサーバから返されるケースに備えて、
     // ページ遷移後も常に有効な timeout に上書きする。
     // 併せて navigator.credentials.{create,get} の解決値/エラーを console にダンプして
-    // CI で WebAuthn 側の失敗原因を可視化する（passkey スクリプト側の catch は
-    // NotAllowedError を握り潰すためログに出てこない）。
+    // CI で WebAuthn 側の失敗原因を可視化する（passkey スクリプト側は NotAllowedError を
+    // alert で案内するだけで、エラーオブジェクトの詳細までは console に出さないため）。
     await context.addInitScript(() => {
       const originalCreate = navigator.credentials.create.bind(navigator.credentials);
       navigator.credentials.create = async (options?: CredentialCreationOptions) => {
@@ -345,5 +346,52 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
     await expect(page.locator('input[name="login_id"]')).toHaveCount(0);
     // ホームのヘッダ「ホーム」が見えればログイン完了とみなす
     await expect(page.locator('h1, h2', { hasText: 'ホーム' })).toBeVisible();
+  });
+
+  test('端末にパスキーが無い場合は案内ダイアログが表示される (#26)', async () => {
+    test.setTimeout(90000);
+
+    // #26 の再現。ログイン画面は誰がログインするか未確定なので b2b_subject を送らず、
+    // EcAuth は Organization 内の全クレデンシャルを allowCredentials に詰めて返す。
+    // その結果「他人のパスキーだけが許可された」状態で credentials.get() が呼ばれ、
+    // 当人の端末に該当クレデンシャルが無いため NotAllowedError になる。
+    // サーバー側の登録は残したまま仮想オーセンティケータの資格情報だけを消すと、
+    // まさにこの状況（allowCredentials は非空／端末には無い）が作れる。
+    await cdpSession.send('WebAuthn.clearCredentials', { authenticatorId });
+
+    // ログアウトはしない。EC-CUBE 2 の LC_Page_Admin_Index はログイン済みでも
+    // 常に login.tpl を描画する（ログイン済みならリダイレクト、という分岐が無い）ため、
+    // セッションを保ったままログイン画面のパスキーボタンを操作できる。
+    // ここでログアウトすると afterAll のクリーンアップが session の
+    // ecauth_access_token を失い、staging にパスキーの残骸を残してしまう。
+    await page.goto(ADMIN_BASE);
+
+    const passkeyBtn = page.locator('#ecauth-passkey-login');
+    await expect(passkeyBtn).toBeVisible();
+
+    // 初回利用者向けの常設案内はボタンの title（ツールチップ）で出す
+    await expect(passkeyBtn).toHaveAttribute('title', /パスキー管理/);
+
+    // NotAllowedError を握り潰していた頃は、ここで何も表示されずラベルが戻るだけだった。
+    // キャンセルと「該当パスキー無し」はブラウザ API 上区別できないため、
+    // 双方に当てはまる文面かつ復旧手順を含むことを確認する。
+    //
+    // 先行テストが登録済みの永続 dialog ハンドラ（全 accept）より後に呼ばれるが、
+    // dialog.message() は受信済みペイロードから読めるので順序に依存しない。
+    const dialogMessage = new Promise<string>((resolve) => {
+      page.once('dialog', (dialog) => {
+        resolve(dialog.message());
+        dialog.accept().catch(() => {});
+      });
+    });
+
+    await passkeyBtn.click();
+
+    const message = await dialogMessage;
+    expect(message).toContain('パスキーが見つからないか');
+    expect(message).toContain('パスキー管理');
+
+    // ラベルが「認証中...」のまま固まらず、押し直せる状態に戻ること
+    await expect(passkeyBtn).toHaveText('パスキーでログイン');
   });
 });

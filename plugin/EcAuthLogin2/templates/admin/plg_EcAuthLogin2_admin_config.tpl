@@ -94,7 +94,11 @@
                 <td>
                     <!--{* client_id は "ec-{組織コード}-{UUID32桁}" で 50 文字を超えうる。
                            maxlength が短いとブラウザが静かに切り詰め、Base URL の自動解決に失敗する。 *}-->
-                    <input type="text" name="client_id" value="<!--{$arrForm.client_id.value|h}-->" size="60" maxlength="<!--{$smarty.const.MTEXT_LEN}-->" />
+                    <!--{* data-saved は「保存済みの値」。JS 側でこれと入力値を比べて
+                           テナント変更の確認ダイアログを出す。値を JS リテラルに
+                           直接埋めるとエスケープを誤りやすいので属性経由で渡す。 *}-->
+                    <input type="text" name="client_id" id="ecauth-client-id" value="<!--{$arrForm.client_id.value|h}-->" data-saved="<!--{$saved_client_id|h}-->" size="60" maxlength="<!--{$smarty.const.MTEXT_LEN}-->" />
+                    <p style="color: #666; font-size: 0.9em;">Client ID を別のテナントのものに変更すると、登録済みのパスキーは使えなくなります。</p>
                 </td>
             </tr>
             <tr>
@@ -142,5 +146,35 @@
     </div>
     <!--{/if}-->
 </div>
+
+<script>
+(function () {
+    // 接続先テナント（client_id）を変えると、サーバー側で全管理者の
+    // ecauth_subject をクリアする（登録済みパスキーの紐付けが切れる）。
+    // 取り返しのつく操作ではないので、送信前に確認を挟む。
+    // なお確認はあくまで UI 上の保険で、実際のクリアは保存処理側が
+    // 新旧 client_id の比較で判断する（JS を経由しない送信でも整合する）。
+    var form = document.getElementById('form1');
+    var input = document.getElementById('ecauth-client-id');
+    if (!form || !input) { return; }
+
+    form.addEventListener('submit', function (event) {
+        var saved = input.getAttribute('data-saved') || '';
+        var current = input.value.replace(/^\s+|\s+$/g, '');
+        // 初回登録（saved が空）と、値が変わっていない場合は確認しない。
+        if (saved === '' || saved === current) { return; }
+
+        var ok = window.confirm(
+            '接続先のテナント (Client ID) を変更しようとしています。\n\n'
+            + '登録済みのパスキーはすべて使えなくなり、EcAuth との紐付けが解除されます。\n'
+            + '各管理者は、パスワードでログインしてパスキーを登録し直す必要があります。\n\n'
+            + '続行しますか？'
+        );
+        if (!ok) {
+            event.preventDefault();
+        }
+    });
+})();
+</script>
 
 <!--{include file="`$smarty.const.TEMPLATE_ADMIN_REALDIR`admin_popup_footer.tpl"}-->

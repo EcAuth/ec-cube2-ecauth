@@ -176,21 +176,44 @@ $source = $objTransform->getHTML();
 
 ## EcAuth 連携で踏みやすい罠
 
-### ecauth_subject は client_id を変えても再利用される
+### ecauth_subject は client_id 変更時に設定画面がクリアする
 
 `SC_Helper_EcAuthLogin2::ensureB2BUser()` は `b2b_subject` を `dtb_member.ecauth_subject` に
 永続化し、値があれば**無条件に再利用**する。一方 EcAuth 側の `B2BUser.Subject` はグローバル一意
 なので、**テスト用テナントの `client_id` で試した後に本番用へ差し替えると、別 Organization に
 同じ subject を登録しようとして必ず失敗する**（`register/options` が 400）。
 
+そのため `LC_Page_Admin_EcAuthLogin2_Config::doPostMode()` が保存前後の `client_id` を比較し、
+変わっていれば `SC_Helper_EcAuthLogin2::clearMemberEcauthSubjects()` で
+`dtb_member.ecauth_subject` を一括クリアする（#18）。テナントを移す以上、古い subject に
+紐づくパスキーはどのみち使えないため実害はない。設定画面側は送信前に `confirm()` で確認する
+が、**確認はあくまで UI 上の保険**で、クリアの判断はサーバー側の新旧比較が行う。
+
+`dtb_customer.ecauth_subject` は触らない。あちらは B2C の `sub` で、発番するのは
+プラグインではなく EcAuth 側であり、テナントが変われば別の値が降ってきて衝突しないため。
+
+自動クリアが効かない環境（旧バージョンのまま運用している等）でこの症状に当たった場合、
 EcAuth 側のログに `Failed to create or retrieve B2BUser: <uuid>` が出ていればこれ。
-回避は対象管理者の `ecauth_subject` をクリアすること。
+手動での回避は対象管理者の `ecauth_subject` をクリアすること。
 
 ```sql
 UPDATE dtb_member SET ecauth_subject = NULL, update_date = CURRENT_TIMESTAMP WHERE member_id = ?;
 ```
 
-恒久対応は [EcAuth/ec-cube2-ecauth#18](https://github.com/EcAuth/ec-cube2-ecauth/issues/18)。
+### リダイレクトで終わるページは skip_load_page_layout を立てる
+
+`LC_Page::init()` は `skip_load_page_layout` が false のままだと `SCRIPT_NAME` をキーに
+`dtb_pagelayout` を引きに行き、レコードが無いと「ページ情報を取得できませんでした」
+「メイン部のテンプレートが存在しません」の `E_USER_WARNING` を 2 行出す。`callback.php` は
+これを**認証成功のたびに** `data/logs/error.log` へ積んでいた（#27）。
+
+`ecauth/*` のページはテンプレートを描画せずリダイレクトで終わるため、`init()` の
+**`parent::init()` より前**にこのフラグを立てる。`LC_Page` 継承を外す必要はない。
+なお `SC_Response_Ex::sendRedirect()` は内部で `exit` するので、これらのページの
+`sendResponse()` は到達しない（呼ばない）。
+
+管理画面側で同じ問題が起きないのは、`LC_Page_Admin::init()` が `parent::init()` を呼ばず
+完全に上書きしているため。フロント側の `LC_Page_*` を新設するときだけ気にすればよい。
 
 ### EcAuth API の日時は ISO 8601 (UTC)
 
