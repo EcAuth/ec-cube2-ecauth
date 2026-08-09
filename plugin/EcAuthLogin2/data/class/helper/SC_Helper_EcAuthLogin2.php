@@ -625,6 +625,110 @@ class SC_Helper_EcAuthLogin2
     }
 
     /**
+     * 保存によって接続先の client_id が実質的に変わるかを判定する。
+     *
+     * 設定画面はこの判定を 3 つの用途に使う。
+     *  1. ecauth_subject を一括クリアするか（#18）
+     *  2. 新しい接続先の Client Secret の入力を必須にするか
+     *  3. 事前入力のままの Base URL を捨てて再解決するか
+     *
+     * - 初回登録（保存前の値が無い）では false。まだどのテナントにも
+     *   subject を登録しておらず、Secret も Base URL も新規入力のため。
+     * - 前後で同じなら false。設定画面は client_id 以外の項目だけを変えて
+     *   保存されることの方が多く、ここで true になると全管理者のパスキーを
+     *   巻き添えにする。
+     * - 前後の空白差だけの違いも false。保存側は trim 済みの値を渡すが、
+     *   旧値は trim せず保存された可能性があるため、ここでも両方 trim する。
+     *
+     * @param string|null $previousClientId 保存前の client_id
+     * @param string|null $newClientId 保存する client_id
+     * @return bool
+     */
+    public static function hasClientIdChanged($previousClientId, $newClientId)
+    {
+        $previous = trim((string) $previousClientId);
+        $new = trim((string) $newClientId);
+
+        if ($previous === '') {
+            return false;
+        }
+
+        return $previous !== $new;
+    }
+
+    /**
+     * 設定画面の Base URL 欄の入力値を捨てて、client_id から解決し直すべきかを判定する。
+     *
+     * 設定画面は Base URL 欄に保存済みの値を事前入力する。そのため Client ID だけを
+     * 別の接続先のものに書き換えて保存すると、欄には前の接続先の URL が残ったまま
+     * 送信され、「入力があった」と見なされて再解決されない。結果として
+     * 「新しい client_id + 前の接続先の Base URL」が保存され、API 呼び出しが
+     * 前のテナントへ飛び続ける。
+     *
+     * 入力値が保存済みの値と同一なら「入力した」のではなく「事前入力を触っていない」
+     * と解釈して捨てる。管理者が明示的に別の値を打った場合はその値を尊重する。
+     *
+     * @param bool $clientIdChanged hasClientIdChanged() の結果
+     * @param string|null $inputBaseUrl フォームから送られてきた Base URL
+     * @param string|null $savedBaseUrl 保存済みの Base URL
+     * @return bool true なら入力値を採用せず client_id から解決し直す
+     */
+    public static function shouldDiscardBaseUrlInput($clientIdChanged, $inputBaseUrl, $savedBaseUrl)
+    {
+        if (!$clientIdChanged) {
+            return false;
+        }
+
+        $input = trim((string) $inputBaseUrl);
+        if ($input === '') {
+            // もともと未入力。呼び出し側が従来どおり解決するので捨てるものが無い。
+            return false;
+        }
+
+        return $input === trim((string) $savedBaseUrl);
+    }
+
+    /**
+     * dtb_member.ecauth_subject を一括クリアする。
+     *
+     * 接続先テナント（client_id）を変更したときに使う。ecauth_subject は
+     * EcAuth 側の B2BUser.Subject と 1:1 で、EcAuth では Subject が
+     * Organization をまたいでグローバル一意なため、古いテナントで発番した
+     * subject を新しいテナントに登録しようとすると一意制約に阻まれ、
+     * register/options が必ず 400 になる（EcAuth/ec-cube2-ecauth#18）。
+     * クリアすれば次回登録時に新しい UUID が発番され、正常に登録できる。
+     *
+     * 対象は dtb_member（B2B パスキー）のみ。dtb_customer.ecauth_subject は
+     * B2C の sub で、値を発番するのはプラグインではなく EcAuth 側であり、
+     * テナントが変われば別の sub が降ってきて衝突しないため触らない。
+     *
+     * @param SC_Query_Ex|null $objQuery 省略時はシングルトンを使う（テスト用の注入口）
+     * @return int クリアした件数
+     */
+    public function clearMemberEcauthSubjects($objQuery = null)
+    {
+        if ($objQuery === null) {
+            $objQuery = SC_Query_Ex::getSingletonInstance();
+        }
+        $count = (int) $objQuery->count('dtb_member', 'ecauth_subject IS NOT NULL');
+        if ($count === 0) {
+            return 0;
+        }
+
+        // NULL は $arrRawSql で渡す。$arrVal に null を入れると SC_Query::update() の
+        // strcasecmp('Now()', $val) に null が渡り、PHP 8.1 以降で Deprecated になる。
+        $objQuery->update(
+            'dtb_member',
+            array('update_date' => 'CURRENT_TIMESTAMP'),
+            'ecauth_subject IS NOT NULL',
+            array(),
+            array('ecauth_subject' => 'NULL')
+        );
+
+        return $count;
+    }
+
+    /**
      * EcAuth /register/options が返す user.id (base64url) を Member.ecauth_subject と
      * 突き合わせ、異なっていれば EcAuth 側の値で上書きする。
      * 詳細は ec-cube4-ecauth の PasskeyAuthService::reconcileEcauthSubjectFromOptions を参照。

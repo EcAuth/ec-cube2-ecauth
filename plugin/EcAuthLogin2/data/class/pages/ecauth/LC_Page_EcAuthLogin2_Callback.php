@@ -26,14 +26,25 @@ class LC_Page_EcAuthLogin2_Callback extends LC_Page_Ex
 {
     public function init()
     {
+        // このページはテンプレートを描画せず、正常系・エラー系とも
+        // SC_Response_Ex::sendRedirect()（内部で exit する）で終わる。
+        // LC_Page::init() は skip_load_page_layout が false のままだと
+        // SCRIPT_NAME をキーに dtb_pagelayout を引きに行くため、対応レコードが
+        // 無いこのページでは「ページ情報を取得できませんでした」
+        // 「メイン部のテンプレートが存在しません」の E_USER_WARNING が
+        // 認証成功のたびに 2 行ずつ error.log に積まれる。
+        // 継承を外さずに済むよう、本体が用意しているこのフラグで解決を止める。
+        // フラグは parent::init() より前に立てる必要がある。
+        $this->skip_load_page_layout = true;
         parent::init();
-        $this->tpl_title = 'EcAuth ログイン';
     }
 
     public function process()
     {
+        // sendResponse() は呼ばない。action() の全経路が sendRedirect() で
+        // exit するため到達せず、かつ skip_load_page_layout により
+        // arrPageLayout が未設定なので、仮に到達すると別の警告を生む。
         $this->action();
-        $this->sendResponse();
     }
 
     public function action()
