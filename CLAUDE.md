@@ -189,6 +189,13 @@ $source = $objTransform->getHTML();
 紐づくパスキーはどのみち使えないため実害はない。設定画面側は送信前に `confirm()` で確認する
 が、**確認はあくまで UI 上の保険**で、クリアの判断はサーバー側の新旧比較が行う。
 
+**クリアは `saveConfig()` より先に実行する。** `SC_Query` は `force_run=false`（既定）だと
+DB エラーで `trigger_error(E_USER_ERROR)` を呼びスクリプトごと終了するため、2 つの UPDATE を
+try/catch で束ねられない。先に `client_id` を保存するとクリア側で落ちたときに「新しい
+`client_id` + 古い subject」が残り、再保存しても新旧が同値になってクリア判定が立たず、
+管理画面から復旧できなくなる（手動 SQL 送り）。逆順なら落ちても接続先は旧のままで、
+保存し直せばやり直せる。
+
 `dtb_customer.ecauth_subject` は触らない。あちらは B2C の `sub` で、発番するのは
 プラグインではなく EcAuth 側であり、テナントが変われば別の値が降ってきて衝突しないため。
 
@@ -197,7 +204,8 @@ EcAuth 側のログに `Failed to create or retrieve B2BUser: <uuid>` が出て�
 手動での回避は対象管理者の `ecauth_subject` をクリアすること。
 
 ```sql
-UPDATE dtb_member SET ecauth_subject = NULL, update_date = CURRENT_TIMESTAMP WHERE member_id = ?;
+-- 123 は対象の管理者 ID（dtb_member.member_id）に置き換えて実行する
+UPDATE dtb_member SET ecauth_subject = NULL, update_date = CURRENT_TIMESTAMP WHERE member_id = 123;
 ```
 
 ### リダイレクトで終わるページは skip_load_page_layout を立てる

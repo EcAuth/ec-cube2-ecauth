@@ -159,7 +159,10 @@
     if (!form || !input) { return; }
 
     form.addEventListener('submit', function (event) {
-        var saved = input.getAttribute('data-saved') || '';
+        // サーバー側の shouldResetEcauthSubjects() は新旧どちらも trim して比べる。
+        // ここで saved を trim しないと、空白付きで保存された値のときだけ
+        // 「確認ダイアログは出るのにクリアはされない」という食い違いが起きる。
+        var saved = (input.getAttribute('data-saved') || '').replace(/^\s+|\s+$/g, '');
         var current = input.value.replace(/^\s+|\s+$/g, '');
         // 初回登録（saved が空）と、値が変わっていない場合は確認しない。
         if (saved === '' || saved === current) { return; }

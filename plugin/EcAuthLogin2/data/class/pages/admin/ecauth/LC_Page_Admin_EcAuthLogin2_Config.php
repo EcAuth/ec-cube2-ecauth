@@ -163,18 +163,33 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
         $savedConfig = $objHelper->getConfig();
         $previousClientId = isset($savedConfig['client_id']) ? (string) $savedConfig['client_id'] : '';
 
-        $objHelper->saveConfig($config);
-
-        $message = '設定を保存しました。';
+        // ecauth_subject のクリアは saveConfig() より「先」に行う。
+        //
+        // この 2 つは別々の UPDATE で、間で落ちる可能性がある。EC-CUBE 2 の
+        // SC_Query は force_run=false（getSingletonInstance() の既定）だと
+        // DB エラーで trigger_error(E_USER_ERROR) を呼びスクリプトごと終了するため、
+        // try/catch で拾って後始末する形にはできない。
+        //
+        // 先に client_id を保存してしまうと、クリア側で落ちたときに
+        // 「新しい client_id + 古い subject」という #18 そのものの状態が残る。
+        // しかも再保存しても新旧が同値になりクリア判定が立たないため、
+        // 管理画面からは復旧できず手動 SQL が要る。
+        // 順序を逆にすれば、落ちても接続先は旧 client_id のままなので、
+        // 保存し直せば同じ判定を経てやり直せる。
+        $resetMessage = '';
         if (SC_Helper_EcAuthLogin2::shouldResetEcauthSubjects($previousClientId, $config['client_id'])) {
-            $message .= $this->handleClientIdChanged($objHelper);
+            $resetMessage = $this->handleClientIdChanged($objHelper);
         }
 
-        $this->tpl_onload = "alert('" . $message . "');";
+        $objHelper->saveConfig($config);
+
+        $this->tpl_onload = "alert('設定を保存しました。" . $resetMessage . "');";
     }
 
     /**
-     * 接続先テナント（client_id）が変わったときの後始末。
+     * 接続先テナント（client_id）が変わるときの前始末。
+     *
+     * 呼び出しは saveConfig() の前。理由は呼び出し側のコメントを参照。
      *
      * dtb_member.ecauth_subject は EcAuth の B2BUser.Subject と 1:1 で、
      * EcAuth 側では Subject が Organization をまたいでグローバル一意。
