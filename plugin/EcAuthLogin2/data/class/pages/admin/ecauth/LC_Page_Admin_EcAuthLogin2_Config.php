@@ -123,7 +123,35 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
             'provider_name' => trim($values['provider_name']),
         );
 
+        // 保存で上書きされる前の設定。接続先が変わるかどうかの判定と、
+        // Base URL 欄が事前入力のままかどうかの判定に使う。
+        $savedConfig = $objHelper->getConfig();
+        $previousClientId = isset($savedConfig['client_id']) ? (string) $savedConfig['client_id'] : '';
+        $savedBaseUrl = isset($savedConfig['ecauth_base_url']) ? trim((string) $savedConfig['ecauth_base_url']) : '';
+        $clientIdChanged = SC_Helper_EcAuthLogin2::hasClientIdChanged($previousClientId, $config['client_id']);
+
+        // 接続先が変わるなら、新しいテナントの Client Secret を必須にする。
+        // Client Secret 欄は「変更時のみ入力」で、空欄なら下の分岐で既存値が
+        // 維持される。テナントが変わるとその既存値は前のテナントのもので確実に
+        // 無効なため、空欄のまま保存させると「新しい client_id + 前のテナントの
+        // secret」が出来上がり、トークン交換が必ず失敗する。
+        $newSecret = isset($_POST['client_secret']) ? trim($_POST['client_secret']) : '';
+        if ($clientIdChanged && $newSecret === '') {
+            $this->arrErr = array(
+                'client_secret' => '※ Client ID を変更する場合は、新しい接続先の Client Secret も入力してください。前の接続先の Client Secret は使用できません。',
+            );
+
+            return;
+        }
+
+        // Base URL 欄には保存済みの値が事前入力される。Client ID を変えたのに欄が
+        // 前の接続先の URL のままなら、それは「触っていない」だけなので採用しない。
+        // 判定の詳細は shouldDiscardBaseUrlInput() を参照。
         $inputBaseUrl = trim($values['ecauth_base_url']);
+        if (SC_Helper_EcAuthLogin2::shouldDiscardBaseUrlInput($clientIdChanged, $inputBaseUrl, $savedBaseUrl)) {
+            $inputBaseUrl = '';
+        }
+
         if ($inputBaseUrl === '') {
             $resolved = $objHelper->resolveClient($config['client_id']);
             if (!$resolved['success']) {
@@ -154,14 +182,10 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
         $config['ecauth_base_url'] = $normalizedBaseUrl;
 
         // client_secret は空入力時は既存値を維持する
-        $newSecret = isset($_POST['client_secret']) ? trim($_POST['client_secret']) : '';
+        // （接続先が変わる場合は上で空欄を弾いているので、ここには来ない）
         if ($newSecret !== '') {
             $config['client_secret'] = $newSecret;
         }
-
-        // 保存で上書きされる前に、現在の client_id を控えておく。
-        $savedConfig = $objHelper->getConfig();
-        $previousClientId = isset($savedConfig['client_id']) ? (string) $savedConfig['client_id'] : '';
 
         // ecauth_subject のクリアは saveConfig() より「先」に行う。
         //
@@ -177,7 +201,7 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
         // 順序を逆にすれば、落ちても接続先は旧 client_id のままなので、
         // 保存し直せば同じ判定を経てやり直せる。
         $resetMessage = '';
-        if (SC_Helper_EcAuthLogin2::shouldResetEcauthSubjects($previousClientId, $config['client_id'])) {
+        if ($clientIdChanged) {
             $resetMessage = $this->handleClientIdChanged($objHelper);
         }
 

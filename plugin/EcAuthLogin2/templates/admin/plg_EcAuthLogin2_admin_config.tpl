@@ -159,7 +159,7 @@
     if (!form || !input) { return; }
 
     form.addEventListener('submit', function (event) {
-        // サーバー側の shouldResetEcauthSubjects() は新旧どちらも trim して比べる。
+        // サーバー側の hasClientIdChanged() は新旧どちらも trim して比べる。
         // ここで saved を trim しないと、空白付きで保存された値のときだけ
         // 「確認ダイアログは出るのにクリアはされない」という食い違いが起きる。
         var saved = (input.getAttribute('data-saved') || '').replace(/^\s+|\s+$/g, '');
