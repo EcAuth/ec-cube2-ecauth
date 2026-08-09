@@ -190,9 +190,21 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
     // Best-effort で登録したパスキーを削除し、staging に残骸を残さない。
     // describe.serial では先行テストが失敗すると後続テストが skip されるため、
     // クリーンアップは独立 test ではなく afterAll に置く。
+    //
+    // パスキー一覧ページ (passkey.php) はサーバー側 PHP から EcAuth の
+    // /v1/b2b/passkey/list を同期で叩くため、staging の応答が遅いと goto が
+    // そのまま待たされる。既定のフックタイムアウト 30 秒だとこれだけで
+    // afterAll ごと失敗し、テスト自体は全部通っているのに run が赤くなる。
+    // クリーンアップは best-effort なので、
+    //   - フックには余裕を持たせる
+    //   - 個々の goto は明示タイムアウトで縛り、超えたら catch でログに落とす
+    // という方針にする（残骸は残るが、run を落とすよりは良い）。
+    test.setTimeout(90000);
+    const gotoOptions = { timeout: 20000 };
+
     try {
       if (page && !page.isClosed() && createdCredentialId) {
-        await page.goto(`${ADMIN_BASE}ecauth/passkey.php`);
+        await page.goto(`${ADMIN_BASE}ecauth/passkey.php`, gotoOptions);
         // ADMIN_BASE 直下にリダイレクトされた = セッション切れでログイン画面表示
         const loginPageRe = new RegExp(`${ADMIN_BASE_RE.replace(/\/$/, '')}/?$`);
         // セッション切れの場合は password 再ログインしてからクリーンアップを試みる
@@ -205,7 +217,7 @@ test.describe.serial('E2E: B2Bパスキー登録からログイン完了まで�
             page.waitForURL(new RegExp(`${ADMIN_BASE_RE}home\\.php`), { timeout: 15000 }),
             page.click('a:has-text("LOGIN")'),
           ]);
-          await page.goto(`${ADMIN_BASE}ecauth/passkey.php`);
+          await page.goto(`${ADMIN_BASE}ecauth/passkey.php`, gotoOptions);
         }
         // 再ログイン失敗時など、依然としてログイン画面にいる場合は諦める
         if (!loginPageRe.test(new URL(page.url()).pathname)) {
