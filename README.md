@@ -154,6 +154,11 @@ ec-cube2-ecauth/
 に一覧を持ち、インストール／アップデートの適用前に検証する。欠けたアーカイブで
 「成功」と表示されたまま、実行時に `require_once` で fatal error になるのを防ぐ。
 
+対象はプラグイン本体クラス（`EcAuthLogin2.php`）、`data/class/` 配下、`config.php`、
+`filemap_legacy.php`、管理画面テンプレート。アップデートは `copyDirectory()` による
+マージコピーなので、アーカイブから欠けたファイルは旧バージョンのものが残り、
+`dtb_plugin` のバージョンだけ上がって新旧が混在する。それを適用前に止める。
+
 1.0.4 以前は `data/class/` へコピーしていたが、コアのディレクトリツリーを汚染するうえ、
 本体が提供する `SC_Plugin_Installer::copyFile()` / `copyDirectory()` のコピー先は
 `html/plugin/<plugin_code>/` に固定されており、そもそも本体のインストール API では

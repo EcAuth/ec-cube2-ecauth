@@ -19,10 +19,20 @@
  * 配置表から外した結果この穴が空いたため、別表で検証する (#30)。
  *
  * 欠けたときの影響:
+ *   - EcAuthLogin2.php: SC_Helper_Plugin::load() が読むプラグイン本体クラス。
+ *     アップデート経路は copyDirectory によるマージコピーなので、アーカイブから
+ *     欠けると旧バージョンのクラスが残ったまま dtb_plugin のバージョンだけ上がり、
+ *     新しいページクラスと旧フック実装が混在する
  *   - data/class/ 配下: エントリポイントの require_once が fatal error になる
  *   - config.php: プラグイン管理の「設定」リンクが機能しない
+ *   - filemap_legacy.php: 旧配置の残骸削除が無言でスキップされる
  *   - templates/admin/: is_file() で握り潰されるため、管理画面のパスキーボタンや
  *     メニューが無言で出なくなる（#26 と同種の「フィードバックが無い」状態）
+ *
+ * 逆に、以下は別経路で検証済みなのでここには載せない。
+ *   - plugin_info.php / plugin_update.php: 本体の updatePlugin() が requirePluginFile() する
+ *   - filemap.php / required_files.php（このファイル）: plugin_update::update() が明示的に確認する
+ *   - logo.png / html/ 配下: filemap.php に載っており配置時に検証される
  *
  * @see filemap.php
  * @see EcAuthLogin2::verifyRequiredFiles()
@@ -30,6 +40,10 @@
  */
 
 return array(
+    // プラグイン本体クラス。SC_Helper_Plugin::load() が
+    // PLUGIN_UPLOAD_REALDIR/<PLUGIN_CODE>/<CLASS_NAME>.php として直接 require する。
+    'EcAuthLogin2.php',
+
     // 共通ヘルパー
     'data/class/helper/SC_Helper_EcAuthLogin2.php',
     'data/class/helper/SC_Helper_EcAuthLogin2_BaseUrl.php',
@@ -48,6 +62,9 @@ return array(
 
     // 本体が PLUGIN_UPLOAD_REALDIR から直接 require する設定画面エントリ
     'config.php',
+
+    // 旧配置の残骸削除に使う表
+    'filemap_legacy.php',
 
     // prefilterTransform が file_get_contents で読む管理画面テンプレート
     'templates/admin/plg_EcAuthLogin2_admin_config.tpl',

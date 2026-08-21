@@ -87,6 +87,43 @@ class PluginFileLayoutTest extends TestCase
     }
 
     /**
+     * プラグインルート直下のファイルも PLUGIN_UPLOAD_REALDIR から直接読まれる。
+     * とくに EcAuthLogin2.php は SC_Helper_Plugin::load() が読むプラグイン本体で、
+     * アップデート時に欠けると旧クラスが残ったまま新旧混在になる。
+     *
+     * 除外しているものは、いずれも別経路で存在が保証される。
+     */
+    public function testEveryRootLevelFileIsListedAsRequired()
+    {
+        $required = require self::pluginDir().'required_files.php';
+
+        $verifiedElsewhere = [
+            // 本体の updatePlugin() が requirePluginFile() で読む
+            'plugin_info.php',
+            'plugin_update.php',
+            // plugin_update::update() が検証フェーズで明示的に is_file() する
+            'filemap.php',
+            'required_files.php',
+        ];
+
+        $rootFiles = glob(self::pluginDir().'*.php') ?: [];
+        self::assertNotEmpty($rootFiles);
+
+        $prefixLength = strlen(self::pluginDir());
+        foreach ($rootFiles as $file) {
+            $relative = substr($file, $prefixLength);
+            if (in_array($relative, $verifiedElsewhere, true)) {
+                continue;
+            }
+            self::assertContains(
+                $relative,
+                $required,
+                $relative.' が required_files.php に載っていない'
+            );
+        }
+    }
+
+    /**
      * 管理画面テンプレートも PLUGIN_UPLOAD_REALDIR から直接読まれる。
      * 欠けると is_file() で握り潰され、無言で機能が落ちる。
      */
