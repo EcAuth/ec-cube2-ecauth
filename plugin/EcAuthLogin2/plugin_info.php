@@ -12,7 +12,7 @@ class plugin_info
     public static $PLUGIN_CODE = 'EcAuthLogin2';
 
     /** プラグイン名（必須）：EC-CUBE上で表示されるプラグイン名 */
-    public static $PLUGIN_NAME = 'EcAuth Login (パスキー / ソーシャルログイン)';
+    public static $PLUGIN_NAME = 'EcAuth Login (パスキー)';
 
     /** クラス名（必須）：プラグインのクラス（拡張子は含まない） */
     public static $CLASS_NAME = 'EcAuthLogin2';

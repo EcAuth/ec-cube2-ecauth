@@ -289,9 +289,14 @@ class EcAuthLogin2
             return;
         }
 
-        // 既存インストールでは当該キー自体が存在しないため、empty() で「未設定 = 無効」
-        // として扱う。設定のマイグレーションは不要。
-        if (empty($config['enable_b2c_login'])) {
+        // 既存インストールでは当該キー自体が存在しないため、未設定は無効として扱う
+        // （設定のマイグレーションは不要）。
+        //
+        // 有効値は boolean の true のみに限定する。この設定は画面から入力せず
+        // free_field1 の JSON を直接編集して与えるため、empty() 判定だと
+        // {"enable_b2c_login":"false"} のような文字列を「有効」と解釈してしまう。
+        // 未提供機能のゲートなので、曖昧な値はすべて無効側に倒す。
+        if (!isset($config['enable_b2c_login']) || $config['enable_b2c_login'] !== true) {
             return;
         }
 

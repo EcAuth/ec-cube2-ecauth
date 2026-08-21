@@ -45,6 +45,44 @@ class B2CLoginButtonTest extends TestCase
         self::assertSame(self::SOURCE, $source);
     }
 
+    /**
+     * この設定は画面から入力せず free_field1 の JSON を直接編集して与えるため、
+     * 「有効にしたつもりのない値」で有効化されないことを保証する。
+     *
+     * @dataProvider nonBooleanTrueValues
+     *
+     * @param mixed $value
+     */
+    public function testNotRenderedWhenFlagIsNotBooleanTrue($value)
+    {
+        $source = self::SOURCE;
+        $this->applyTo($source, [
+            'client_id' => 'ec-example-0123456789abcdef',
+            'enable_b2c_login' => $value,
+        ]);
+
+        self::assertSame(self::SOURCE, $source);
+    }
+
+    /**
+     * @return array
+     */
+    public function nonBooleanTrueValues()
+    {
+        return [
+            // empty() 判定では有効と解釈されてしまう値
+            'string "false"' => ['false'],
+            'string "true"' => ['true'],
+            'int 1' => [1],
+            'string "1"' => ['1'],
+            // 元から無効側の値
+            'int 0' => [0],
+            'string "0"' => ['0'],
+            'null' => [null],
+            'empty string' => [''],
+        ];
+    }
+
     public function testNotRenderedWhenClientIdIsEmpty()
     {
         $source = self::SOURCE;

@@ -153,7 +153,7 @@ ec-cube2-ecauth/
 | `ecauth_base_url` | △ | 未入力時は client_id から ClientResolveService 経由で自動解決 |
 | `rp_id` | △ | 未入力時はリクエストホスト名 |
 | `provider_name` | △ | B2C ソーシャルログイン時のフェデレーション先（federate-oauth2 等） |
-| `enable_b2c_login` | − | フロントに B2C ログインボタンを表示するか。**既定 `false`（未設定時も無効）** |
+| `enable_b2c_login` | − | フロントに B2C ログインボタンを表示するか。**既定 `false`（未設定時も無効）**。有効値は JSON の `true` のみで、`"true"` のような文字列は無効として扱う |
 
 `enable_b2c_login` は設定画面に入力欄が無い。B2C は未提供であり、管理者に選択肢として
 見せる段階にないため。動作確認が必要な場合は `free_field1` の JSON を直接編集する。
