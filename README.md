@@ -1,7 +1,10 @@
 # ec-cube2-ecauth
 
 EC-CUBE 2 系向け EcAuth 認証プラグイン。
-B2B パスキー（管理画面ログイン）と B2C ソーシャルログイン（OIDC フェデレーション）を提供する。
+B2B パスキー（管理画面ログイン）を提供する。
+
+B2C ソーシャルログイン（OIDC フェデレーション）は実装途中であり、**未提供**。
+フロントのログインボタンは設定値 `enable_b2c_login`（既定 `false`）で抑止されている。
 
 ## 対応バージョン
 
@@ -19,7 +22,7 @@ B2B パスキー（管理画面ログイン）と B2C ソーシャルログイ�
 |---|---|---|
 | 管理画面パスキーログイン | EC-CUBE 管理者 | WebAuthn / FIDO2 + EcAuth /v1/b2b/passkey/* |
 | 管理画面パスキー管理 | EC-CUBE 管理者 | パスワード再認証 + パスキー登録 / 削除 |
-| 顧客ソーシャルログイン | EC-CUBE フロント顧客 | OIDC PKCE フロー（Google / LINE 等の外部 IdP） |
+| 顧客ソーシャルログイン **（未提供）** | EC-CUBE フロント顧客 | OIDC PKCE フロー（Google / LINE 等の外部 IdP）。既定で無効 |
 
 ## インストール
 
@@ -150,6 +153,12 @@ ec-cube2-ecauth/
 | `ecauth_base_url` | △ | 未入力時は client_id から ClientResolveService 経由で自動解決 |
 | `rp_id` | △ | 未入力時はリクエストホスト名 |
 | `provider_name` | △ | B2C ソーシャルログイン時のフェデレーション先（federate-oauth2 等） |
+| `enable_b2c_login` | − | フロントに B2C ログインボタンを表示するか。**既定 `false`（未設定時も無効）**。有効値は JSON の `true` のみで、`"true"` のような文字列は無効として扱う |
+
+`enable_b2c_login` は設定画面に入力欄が無い。B2C は未提供であり、管理者に選択肢として
+見せる段階にないため。動作確認が必要な場合は `free_field1` の JSON を直接編集する。
+`prefilterTransform` は Smarty のテンプレートコンパイル時にしか走らないので、変更後は
+コンパイル済みテンプレート（`data/Smarty/templates_c/`）の削除が必要。
 
 ## アーキテクチャ
 

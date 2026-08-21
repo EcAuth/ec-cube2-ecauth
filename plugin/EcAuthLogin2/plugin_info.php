@@ -4,7 +4,7 @@
  * EcAuthLogin2 プラグイン情報クラス
  *
  * @package EcAuthLogin2
- * @version 1.0.3
+ * @version 1.0.4
  */
 class plugin_info
 {
@@ -12,13 +12,13 @@ class plugin_info
     public static $PLUGIN_CODE = 'EcAuthLogin2';
 
     /** プラグイン名（必須）：EC-CUBE上で表示されるプラグイン名 */
-    public static $PLUGIN_NAME = 'EcAuth Login (パスキー / ソーシャルログイン)';
+    public static $PLUGIN_NAME = 'EcAuth Login (パスキー)';
 
     /** クラス名（必須）：プラグインのクラス（拡張子は含まない） */
     public static $CLASS_NAME = 'EcAuthLogin2';
 
     /** プラグインバージョン（必須）：プラグインのバージョン */
-    public static $PLUGIN_VERSION = '1.0.3';
+    public static $PLUGIN_VERSION = '1.0.4';
 
     /**
      * 対応バージョン（必須）：対応するEC-CUBEバージョン
@@ -38,7 +38,7 @@ class plugin_info
     public static $AUTHOR = 'EcAuth';
 
     /** 説明（必須）：プラグインの説明 */
-    public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインと、フロントの B2C ソーシャルログイン（Google / LINE / Facebook 等）を提供します。';
+    public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインを提供します。';
 
     /**
      * プラグインURL：プラグインの説明ページなど

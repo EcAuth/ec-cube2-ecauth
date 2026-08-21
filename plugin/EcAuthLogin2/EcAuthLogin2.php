@@ -186,6 +186,7 @@ class EcAuthLogin2
     /**
      * Smarty テンプレートのプレフィルタ。
      * - フロントの mypage/login.tpl と shopping/index.tpl に B2C ログインボタンを差し込む
+     *   （既定では enable_b2c_login が false のため差し込まれない）
      * - 管理画面の admin/login.tpl にパスキーログインスクリプトを差し込む（Phase B-3 で実装）
      * - 管理画面の basis/subnavi.tpl に「パスキー管理」メニューを差し込む
      *
@@ -194,6 +195,8 @@ class EcAuthLogin2
      */
     public function prefilterTransform(&$source, LC_Page_Ex $objPage, $filename)
     {
+        // B2C ログインボタンは設定値 enable_b2c_login（既定 false）で抑止される。
+        // @see insertB2CLoginButton()
         if ($filename === 'mypage/login.tpl' || $filename === 'shopping/index.tpl') {
             $this->insertB2CLoginButton($source, $filename);
 
@@ -264,17 +267,36 @@ class EcAuthLogin2
     }
 
     /**
-     * B2C ログインボタンを挿入する（既存ロジック）
+     * B2C ログインボタンを挿入する。
      *
      * 注意: B2C OIDC フェデレーションは後続リリースで正式提供予定であり、本機能は
-     * 現段階では実運用での使用を想定していない。`client_id` が dtb_plugin に
-     * 保存されていれば mypage/login.tpl 等にボタンが描画されるが、現フェーズでは
-     * 設定保存しない運用とすることでボタンを表示させない (動作確認用にコードは残す)。
+     * 現段階では実運用での使用を想定していない。表示は設定値 `enable_b2c_login`
+     * （既定 false）で抑止する。
+     *
+     * かつては「`client_id` を保存しない運用にすればボタンは出ない」という前提で
+     * 条件が `client_id` の有無だけになっていたが、B2B パスキーが同じ `client_id` を
+     * 使う（かつ設定画面で必須入力の）ため、この前提は成立しない。結果として B2B
+     * だけを使う構成でもフロントに未提供機能への導線が露出していた (#29)。
+     *
+     * `enable_b2c_login` は設定画面に入力欄を設けていない。B2C は未提供であり、
+     * 管理者に選択肢として見せる段階にないため。動作確認が必要な場合は
+     * dtb_plugin.free_field1 の JSON を直接編集して有効化する。
      */
     protected function insertB2CLoginButton(&$source, $filename)
     {
         $config = $this->loadConfig();
         if (empty($config['client_id'])) {
+            return;
+        }
+
+        // 既存インストールでは当該キー自体が存在しないため、未設定は無効として扱う
+        // （設定のマイグレーションは不要）。
+        //
+        // 有効値は boolean の true のみに限定する。この設定は画面から入力せず
+        // free_field1 の JSON を直接編集して与えるため、empty() 判定だと
+        // {"enable_b2c_login":"false"} のような文字列を「有効」と解釈してしまう。
+        // 未提供機能のゲートなので、曖昧な値はすべて無効側に倒す。
+        if (!isset($config['enable_b2c_login']) || $config['enable_b2c_login'] !== true) {
             return;
         }
 
