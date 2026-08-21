@@ -44,6 +44,30 @@ class EcAuthLogin2
         return require __DIR__.'/filemap.php';
     }
 
+    /**
+     * PLUGIN_UPLOAD_REALDIR 配下に存在しなければならないファイルの一覧を取得する。
+     *
+     * @see getFileMap() 配列を返すファイルに分離している理由
+     *
+     * @return array<int,string> プラグインディレクトリからの相対パス
+     */
+    public static function getRequiredFiles()
+    {
+        return require __DIR__.'/required_files.php';
+    }
+
+    /**
+     * 1.0.4 以前が data/class/ 配下へ配置していたクラスファイルの一覧を取得する。
+     *
+     * @see getFileMap() 配列を返すファイルに分離している理由
+     *
+     * @return array<int,string> コピー先指定の配列
+     */
+    public static function getLegacyFileMap()
+    {
+        return require __DIR__.'/filemap_legacy.php';
+    }
+
     public function __construct(array $arrSelfInfo)
     {
         $this->arrSelfInfo = $arrSelfInfo;
@@ -127,10 +151,16 @@ class EcAuthLogin2
      */
     protected function doInstall($arrPlugin)
     {
+        // 検証は DB スキーマ変更より前に済ませる。後段で失敗すると、追加済みの
+        // カラムと初期設定だけが残った中途半端な状態になるため。
+        $this->verifyRequiredFiles();
+
         $this->ensureEcAuthSubjectColumn('dtb_customer');
         $this->ensureEcAuthSubjectColumn('dtb_member', true);
         $this->initializeDefaultConfig();
         $this->copyPluginFiles();
+        // 1.0.4 以前が入っていた環境に上書きインストールした場合の残骸を掃除する。
+        $this->removeLegacyClassFiles();
     }
 
     /**
@@ -141,6 +171,7 @@ class EcAuthLogin2
     protected function doUninstall($arrPlugin)
     {
         $this->removePluginFiles();
+        $this->removeLegacyClassFiles();
     }
 
     protected function doEnable($arrPlugin)
@@ -475,6 +506,52 @@ class EcAuthLogin2
     }
 
     /**
+     * 本体のディレクトリツリーへは配置しないが、PLUGIN_UPLOAD_REALDIR から直接
+     * 読まれるファイルが揃っているか検証する。
+     *
+     * 配置表 (filemap.php) に載っているファイルは copyPluginFiles() が存在を
+     * 確認するが、載っていないものは検証されない。1.0.5 でクラスファイルを配置表から
+     * 外したため、不完全なアーカイブでも「インストール成功」と表示され、実行時に
+     * require_once で fatal error になる穴が空いた。ここで塞ぐ (#30)。
+     *
+     * @throws RuntimeException
+     */
+    protected function verifyRequiredFiles()
+    {
+        // 一覧そのものが壊れていると検証が素通りする。空配列なら foreach が
+        // 0 回で終わり、途中で切れたファイルは require が 1 を返して警告だけ出る。
+        // どちらも「検証した」ことにはならないので、先に一覧の体裁を確かめる。
+        // plugin_update::update() 側と同じ扱いに揃えている。
+        $manifestPath = __DIR__ . '/required_files.php';
+        if (!is_file($manifestPath)) {
+            $message = '[EcAuthLogin2] Required file manifest missing: ' . $manifestPath;
+            error_log($message);
+            throw new RuntimeException($message);
+        }
+
+        $requiredFiles = static::getRequiredFiles();
+        if (!is_array($requiredFiles) || $requiredFiles === array()) {
+            $message = '[EcAuthLogin2] Required file manifest is invalid: ' . $manifestPath;
+            error_log($message);
+            throw new RuntimeException($message);
+        }
+
+        $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
+
+        $missing = array();
+        foreach ($requiredFiles as $relative) {
+            if (!is_file($base . $relative)) {
+                $missing[] = $relative;
+            }
+        }
+        if ($missing !== array()) {
+            $message = '[EcAuthLogin2] Required files missing: ' . implode(', ', $missing);
+            error_log($message);
+            throw new RuntimeException($message);
+        }
+    }
+
+    /**
      * fileMap に従いファイルを配置する。
      *
      * 重要: ソース未検出・mkdir 失敗・copy 失敗はいずれも RuntimeException を
@@ -518,14 +595,40 @@ class EcAuthLogin2
                 @unlink($dest);
             }
         }
-        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/ecauth');
-        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/admin/ecauth');
         $this->cleanupEmptyDir(HTML_REALDIR . 'ecauth/passkey');
         $this->cleanupEmptyDir(HTML_REALDIR . 'ecauth');
         if (defined('ADMIN_DIR')) {
             $this->cleanupEmptyDir(HTML_REALDIR . ADMIN_DIR . 'ecauth/api');
             $this->cleanupEmptyDir(HTML_REALDIR . ADMIN_DIR . 'ecauth');
         }
+    }
+
+    /**
+     * 1.0.4 以前が data/class/ 配下へ配置したクラスファイルを削除する。
+     *
+     * 1.0.5 以降はクラスファイルをコピーせず PLUGIN_UPLOAD_REALDIR から直接
+     * require_once するため、これらは読まれない残骸になる (#30)。実害は無いが、
+     * コアのディレクトリツリーにプラグイン由来のファイルが混ざったままになるので
+     * 掃除する。
+     *
+     * 削除に失敗しても処理は続行する。ここで中断すると、インストール／
+     * アンインストール本体が残骸のせいで失敗することになり、本末転倒なため。
+     */
+    protected function removeLegacyClassFiles()
+    {
+        foreach (self::getLegacyFileMap() as $destSpec) {
+            $dest = $this->expandDestSpec($destSpec);
+            if (!is_file($dest)) {
+                continue;
+            }
+            if (@unlink($dest)) {
+                error_log('[EcAuthLogin2] Removed legacy file: ' . $dest);
+            } else {
+                error_log('[EcAuthLogin2] Failed to remove legacy file: ' . $dest);
+            }
+        }
+        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/ecauth');
+        $this->cleanupEmptyDir(CLASS_REALDIR . 'pages/admin/ecauth');
     }
 
     protected function cleanupEmptyDir($dir)

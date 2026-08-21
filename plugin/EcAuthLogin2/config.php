@@ -14,7 +14,7 @@
  * その時点で /admin/require.php と admin 認証チェックは完了済み。
  */
 
-require_once CLASS_REALDIR . 'pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php';
+require_once __DIR__ . '/data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php';
 
 $objPage = new LC_Page_Admin_EcAuthLogin2_Config();
 $objPage->init();

@@ -77,6 +77,25 @@ class plugin_update
                 $missing[] = $relativeSrc;
             }
         }
+
+        // 配置表に載らないが PLUGIN_UPLOAD_REALDIR から直接読まれるファイル
+        // （クラス・config.php・管理画面テンプレート）も検証する。ここを見ないと、
+        // 欠けたアーカイブでも (1) の copyDirectory がマージコピーなので旧バージョンの
+        // ファイルが残り、新旧が混在したまま「アップデート成功」になる (#30)。
+        $requiredPath = $srcDir.'required_files.php';
+        if (!is_file($requiredPath)) {
+            return self::fail('必須ファイル一覧 (required_files.php) がアーカイブに含まれていません。');
+        }
+        $requiredFiles = require $requiredPath;
+        if (!is_array($requiredFiles) || $requiredFiles === array()) {
+            return self::fail('必須ファイル一覧 (required_files.php) を読み込めませんでした。');
+        }
+        foreach ($requiredFiles as $relative) {
+            if (!is_file($srcDir.$relative)) {
+                $missing[] = $relative;
+            }
+        }
+
         if ($missing !== array()) {
             return self::fail('アーカイブに必要なファイルがありません: '.implode(', ', $missing));
         }
@@ -100,7 +119,12 @@ class plugin_update
             }
         }
 
-        // (3) Smarty のコンパイル済みテンプレートを破棄する。
+        // (3) 1.0.4 以前が data/class/ 配下へ配置した残骸を削除する (#30)。
+        //     配置（2）の後に実行する。先に消すと、途中で失敗したときに
+        //     旧ファイルも新ファイルも無い状態になりうるため。
+        self::removeLegacyClassFiles($srcDir);
+
+        // (4) Smarty のコンパイル済みテンプレートを破棄する。
         //     prefilterTransform はテンプレートのコンパイル時にしか走らないため、
         //     これを消さないと管理画面ログインのパスキーボタンなど、
         //     テンプレートに対する変更が反映されないまま残る。
@@ -109,6 +133,53 @@ class plugin_update
         error_log('[EcAuthLogin2] Updated to '.plugin_info::$PLUGIN_VERSION);
 
         return true;
+    }
+
+    /**
+     * 1.0.4 以前が data/class/ 配下へ配置したクラスファイルを削除する.
+     *
+     * 1.0.5 以降はクラスファイルをコピーせず PLUGIN_UPLOAD_REALDIR から直接
+     * require_once するため、これらは読まれない残骸になる (#30)。
+     *
+     * 一覧は新バージョンの filemap_legacy.php から読む。旧バージョンの
+     * EcAuthLogin2 クラスはロード済みで読み直せないため、そちらの
+     * getLegacyFileMap() は呼べない（冒頭の前提 (c) を参照）。
+     *
+     * 削除に失敗してもアップデート自体は成功扱いにする。残骸が残っても新しい
+     * 配置は完了しており、ここで失敗を返すと本体が「アップデート失敗」と表示して
+     * しまうため。
+     *
+     * @param string $srcDir 展開済みアーカイブのディレクトリ
+     */
+    protected static function removeLegacyClassFiles($srcDir)
+    {
+        $legacyMapPath = $srcDir.'filemap_legacy.php';
+        if (!is_file($legacyMapPath)) {
+            return;
+        }
+        $legacyMap = require $legacyMapPath;
+        if (!is_array($legacyMap)) {
+            return;
+        }
+
+        foreach ($legacyMap as $destSpec) {
+            $dest = self::expandDestSpec($destSpec);
+            if (!is_file($dest)) {
+                continue;
+            }
+            if (@unlink($dest)) {
+                error_log('[EcAuthLogin2] Removed legacy file: '.$dest);
+            } else {
+                error_log('[EcAuthLogin2] Failed to remove legacy file: '.$dest);
+            }
+        }
+
+        foreach (array('pages/ecauth', 'pages/admin/ecauth') as $relative) {
+            $dir = CLASS_REALDIR.$relative;
+            if (is_dir($dir) && count(scandir($dir)) === 2) {
+                @rmdir($dir);
+            }
+        }
     }
 
     /**

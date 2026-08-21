@@ -11,7 +11,7 @@
  */
 
 require_once CLASS_REALDIR . 'pages/LC_Page.php';
-require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
+require_once __DIR__ . '/../../helper/SC_Helper_EcAuthLogin2.php';
 
 /**
  * B2C ソーシャルログインの認可リクエストページ。

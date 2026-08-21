@@ -24,13 +24,13 @@
 // EC-CUBE 2 はプラグインのクラスを自動ロードしないため、依存クラスを明示的に読み込む。
 // ユニットテストでは composer の classmap 経由で既にロード済みなので class_exists で分岐する。
 if (!class_exists('SC_Helper_EcAuthLogin2_BaseUrl')) {
-    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_BaseUrl.php';
+    require_once __DIR__ . '/SC_Helper_EcAuthLogin2_BaseUrl.php';
 }
 if (!class_exists('SC_Helper_EcAuthLogin2_IdToken')) {
-    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_IdToken.php';
+    require_once __DIR__ . '/SC_Helper_EcAuthLogin2_IdToken.php';
 }
 if (!class_exists('SC_Helper_EcAuthLogin2_Jwks')) {
-    require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2_Jwks.php';
+    require_once __DIR__ . '/SC_Helper_EcAuthLogin2_Jwks.php';
 }
 
 class SC_Helper_EcAuthLogin2
