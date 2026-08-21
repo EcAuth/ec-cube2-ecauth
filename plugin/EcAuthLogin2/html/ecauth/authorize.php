@@ -11,7 +11,7 @@
  */
 
 require_once __DIR__ . '/../require.php';
-require_once CLASS_REALDIR . 'pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php';
+require_once PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/data/class/pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php';
 
 $objPage = new LC_Page_EcAuthLogin2_Authorize();
 $objPage->init();

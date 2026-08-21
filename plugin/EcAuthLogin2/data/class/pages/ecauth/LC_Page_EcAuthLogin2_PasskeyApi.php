@@ -16,7 +16,7 @@
  *    結果の redirect_url 等を JSON で返す（フロントが redirect する）
  */
 
-require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
+require_once __DIR__ . '/../../helper/SC_Helper_EcAuthLogin2.php';
 
 /**
  * フロント側パスキー API は JSON のみ返す軽量エンドポイント。

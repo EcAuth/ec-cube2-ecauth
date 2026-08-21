@@ -24,33 +24,19 @@
  */
 
 return array(
-    // 共通ヘルパー
-    'data/class/helper/SC_Helper_EcAuthLogin2.php'
-        => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2.php',
-    // id_token 検証まわり（EcAuthDocs #101）。SC_Helper_EcAuthLogin2 が
-    // require_once するため、コピー漏れがあると認証が丸ごと落ちる。
-    'data/class/helper/SC_Helper_EcAuthLogin2_BaseUrl.php'
-        => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_BaseUrl.php',
-    'data/class/helper/SC_Helper_EcAuthLogin2_IdToken.php'
-        => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_IdToken.php',
-    'data/class/helper/SC_Helper_EcAuthLogin2_Jwks.php'
-        => 'CLASS_REALDIR:helper/SC_Helper_EcAuthLogin2_Jwks.php',
-
-    // B2C ソーシャルログイン用ページクラス
-    'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php'
-        => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Authorize.php',
-    'data/class/pages/ecauth/LC_Page_EcAuthLogin2_Callback.php'
-        => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_Callback.php',
-
-    // B2B 管理画面ページクラス
-    'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php'
-        => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Config.php',
-    'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php'
-        => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_Passkey.php',
-    'data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php'
-        => 'CLASS_REALDIR:pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php',
-    'data/class/pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php'
-        => 'CLASS_REALDIR:pages/ecauth/LC_Page_EcAuthLogin2_PasskeyApi.php',
+    // ------------------------------------------------------------------
+    // クラスファイル（data/class/ 配下）はここに載せない。
+    //
+    // 1.0.4 以前は CLASS_REALDIR（EC-CUBE 本体の data/class/）へコピーしていたが、
+    // コアのディレクトリツリーを汚染するうえ、本体が提供する
+    // SC_Plugin_Installer::copyFile() / copyDirectory() のコピー先は
+    // PLUGIN_HTML_REALDIR/<plugin_code>/ に固定されており、そもそも本体の
+    // インストール API では実現できない配置だった (#30)。
+    //
+    // クラスファイルは Web 公開が不要なので、PLUGIN_UPLOAD_REALDIR に置いたまま
+    // 各エントリポイントから直接 require_once する。旧バージョンが配置した残骸は
+    // filemap_legacy.php を元に削除する。
+    // ------------------------------------------------------------------
 
     // B2C ソーシャルログイン用エントリポイント
     'html/ecauth/authorize.php' => 'HTML_REALDIR:ecauth/authorize.php',
