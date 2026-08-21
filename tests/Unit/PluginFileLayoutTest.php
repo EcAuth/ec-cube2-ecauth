@@ -55,6 +55,58 @@ class PluginFileLayoutTest extends TestCase
         }
     }
 
+    public function testRequiredFilesExist()
+    {
+        $required = require self::pluginDir().'required_files.php';
+        self::assertNotEmpty($required);
+
+        foreach ($required as $relative) {
+            self::assertFileExists(self::pluginDir().$relative, '必須ファイルが存在しない');
+        }
+    }
+
+    /**
+     * 配置表から外したクラスファイルは、必須ファイル一覧で検証される。
+     * 片方から漏れると「不完全なアーカイブでもインストール成功」に戻ってしまう。
+     */
+    public function testEveryPluginLocalClassIsListedAsRequired()
+    {
+        $required = require self::pluginDir().'required_files.php';
+        $classFiles = self::globRecursive(self::pluginDir().'data/class', '*.php');
+        self::assertNotEmpty($classFiles);
+
+        $prefixLength = strlen(self::pluginDir());
+        foreach ($classFiles as $file) {
+            $relative = substr($file, $prefixLength);
+            self::assertContains(
+                $relative,
+                $required,
+                $relative.' が required_files.php に載っていない'
+            );
+        }
+    }
+
+    /**
+     * 管理画面テンプレートも PLUGIN_UPLOAD_REALDIR から直接読まれる。
+     * 欠けると is_file() で握り潰され、無言で機能が落ちる。
+     */
+    public function testEveryAdminTemplateIsListedAsRequired()
+    {
+        $required = require self::pluginDir().'required_files.php';
+        $templates = self::globRecursive(self::pluginDir().'templates', '*.tpl');
+        self::assertNotEmpty($templates);
+
+        $prefixLength = strlen(self::pluginDir());
+        foreach ($templates as $file) {
+            $relative = substr($file, $prefixLength);
+            self::assertContains(
+                $relative,
+                $required,
+                $relative.' が required_files.php に載っていない'
+            );
+        }
+    }
+
     /**
      * エントリポイントは PLUGIN_UPLOAD_REALDIR 経由でプラグイン内のクラスを読む。
      * 実行時にしか解決されないパスなので、綴りが実在するかをここで確かめる。

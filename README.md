@@ -101,6 +101,7 @@ ec-cube2-ecauth/
 │   ├── config.php                           # プラグイン管理「設定」リンクのターゲット
 │   ├── filemap.php                          # ファイル配置表
 │   ├── filemap_legacy.php                   # 1.0.4 以前の旧配置（削除対象）の一覧
+│   ├── required_files.php                   # 配置せずここから直接読むファイルの検証用一覧
 │   ├── data/class/                          # ← EC-CUBE 本体へはコピーせず、ここから直接読む
 │   │   ├── helper/SC_Helper_EcAuthLogin2.php           # EcAuth API クライアント + 共通処理
 │   │   └── pages/
@@ -148,6 +149,10 @@ ec-cube2-ecauth/
 （= `data/downloads/plugin/EcAuthLogin2/`）に置いたまま、各エントリポイントから
 直接 `require_once` する。`config.php` と `templates/` も同様に、本体が
 `PLUGIN_UPLOAD_REALDIR` から直接読む。
+
+配置表に載らないファイルはインストール時の存在検証も効かないため、`required_files.php`
+に一覧を持ち、インストール／アップデートの適用前に検証する。欠けたアーカイブで
+「成功」と表示されたまま、実行時に `require_once` で fatal error になるのを防ぐ。
 
 1.0.4 以前は `data/class/` へコピーしていたが、コアのディレクトリツリーを汚染するうえ、
 本体が提供する `SC_Plugin_Installer::copyFile()` / `copyDirectory()` のコピー先は

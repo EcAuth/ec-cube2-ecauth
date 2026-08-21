@@ -45,6 +45,18 @@ class EcAuthLogin2
     }
 
     /**
+     * PLUGIN_UPLOAD_REALDIR 配下に存在しなければならないファイルの一覧を取得する。
+     *
+     * @see getFileMap() 配列を返すファイルに分離している理由
+     *
+     * @return array<int,string> プラグインディレクトリからの相対パス
+     */
+    public static function getRequiredFiles()
+    {
+        return require __DIR__.'/required_files.php';
+    }
+
+    /**
      * 1.0.4 以前が data/class/ 配下へ配置していたクラスファイルの一覧を取得する。
      *
      * @see getFileMap() 配列を返すファイルに分離している理由
@@ -142,6 +154,7 @@ class EcAuthLogin2
         $this->ensureEcAuthSubjectColumn('dtb_customer');
         $this->ensureEcAuthSubjectColumn('dtb_member', true);
         $this->initializeDefaultConfig();
+        $this->verifyRequiredFiles();
         $this->copyPluginFiles();
         // 1.0.4 以前が入っていた環境に上書きインストールした場合の残骸を掃除する。
         $this->removeLegacyClassFiles();
@@ -487,6 +500,34 @@ class EcAuthLogin2
             'plugin_code = ?',
             array('EcAuthLogin2')
         );
+    }
+
+    /**
+     * 本体のディレクトリツリーへは配置しないが、PLUGIN_UPLOAD_REALDIR から直接
+     * 読まれるファイルが揃っているか検証する。
+     *
+     * 配置表 (filemap.php) に載っているファイルは copyPluginFiles() が存在を
+     * 確認するが、載っていないものは検証されない。1.0.5 でクラスファイルを配置表から
+     * 外したため、不完全なアーカイブでも「インストール成功」と表示され、実行時に
+     * require_once で fatal error になる穴が空いた。ここで塞ぐ (#30)。
+     *
+     * @throws RuntimeException
+     */
+    protected function verifyRequiredFiles()
+    {
+        $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
+
+        $missing = array();
+        foreach (self::getRequiredFiles() as $relative) {
+            if (!is_file($base . $relative)) {
+                $missing[] = $relative;
+            }
+        }
+        if ($missing !== array()) {
+            $message = '[EcAuthLogin2] Required files missing: ' . implode(', ', $missing);
+            error_log($message);
+            throw new RuntimeException($message);
+        }
     }
 
     /**

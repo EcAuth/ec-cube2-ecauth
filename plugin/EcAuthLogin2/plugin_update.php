@@ -77,6 +77,25 @@ class plugin_update
                 $missing[] = $relativeSrc;
             }
         }
+
+        // 配置表に載らないが PLUGIN_UPLOAD_REALDIR から直接読まれるファイル
+        // （クラス・config.php・管理画面テンプレート）も検証する。ここを見ないと、
+        // 欠けたアーカイブでも (1) の copyDirectory がマージコピーなので旧バージョンの
+        // ファイルが残り、新旧が混在したまま「アップデート成功」になる (#30)。
+        $requiredPath = $srcDir.'required_files.php';
+        if (!is_file($requiredPath)) {
+            return self::fail('必須ファイル一覧 (required_files.php) がアーカイブに含まれていません。');
+        }
+        $requiredFiles = require $requiredPath;
+        if (!is_array($requiredFiles) || $requiredFiles === array()) {
+            return self::fail('必須ファイル一覧 (required_files.php) を読み込めませんでした。');
+        }
+        foreach ($requiredFiles as $relative) {
+            if (!is_file($srcDir.$relative)) {
+                $missing[] = $relative;
+            }
+        }
+
         if ($missing !== array()) {
             return self::fail('アーカイブに必要なファイルがありません: '.implode(', ', $missing));
         }
