@@ -4,14 +4,24 @@ import { test, expect } from '@playwright/test';
  * B2C ソーシャルログイン（OIDC フェデレーション）の E2E。
  *
  * B2C は未提供のため、フロントのログインボタンは設定値 `enable_b2c_login`
- * （既定 false）で抑止されている (#29)。既定状態ではボタンが描画されないため
- * skip する。B2C を正式提供する際にこの skip を外すこと。
+ * （既定 false）で抑止されている (#29)。既定状態ではボタンが描画されないので
+ * RUN_B2C_E2E=true が指定されたときだけ実行する。
  *
- * 手元で動かす場合は dtb_plugin.free_field1 の JSON に
- * `"enable_b2c_login": true` を追加し、Smarty のコンパイル済みテンプレートを
- * 削除してから実行する（prefilterTransform はコンパイル時にしか走らない）。
+ * 手元で動かす手順:
+ *   1. dtb_plugin.free_field1 の JSON に `"enable_b2c_login": true` を追加する
+ *      （文字列ではなく boolean の true。有効値はこれのみ）
+ *   2. Smarty のコンパイル済みテンプレートを削除する
+ *      （prefilterTransform はテンプレートコンパイル時にしか走らないため）
+ *   3. RUN_B2C_E2E=true npx playwright test tests/ecauth-login.spec.ts
+ *
+ * B2C を正式提供する際は、この環境変数ガードを外して常時実行に戻すこと。
  */
-test.describe.skip('EcAuth ソーシャルログイン', () => {
+const RUN_B2C_E2E = process.env.RUN_B2C_E2E === 'true';
+const SKIP_REASON = 'B2C ソーシャルログインは未提供 (#29)。RUN_B2C_E2E=true で有効化する';
+
+test.describe('EcAuth ソーシャルログイン', () => {
+  test.skip(!RUN_B2C_E2E, SKIP_REASON);
+
   test.beforeEach(async ({ page }) => {
     // マイページログインページへ移動
     await page.goto('/mypage/login.php');
@@ -91,8 +101,10 @@ test.describe.skip('EcAuth ソーシャルログイン', () => {
   });
 });
 
-// shopping/index.tpl 側も同じ enable_b2c_login で抑止される。上と同じ理由で skip。
-test.describe.skip('購入手続きページ', () => {
+// shopping/index.tpl 側も同じ enable_b2c_login で抑止される。上と同じ条件で実行する。
+test.describe('購入手続きページ', () => {
+  test.skip(!RUN_B2C_E2E, SKIP_REASON);
+
   test('購入手続きページに EcAuth ボタンが表示される', async ({ page }) => {
     // 商品をカートに入れる（前提条件）
     // この部分は実際の商品IDに応じて調整が必要
