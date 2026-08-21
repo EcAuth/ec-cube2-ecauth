@@ -38,7 +38,7 @@ class plugin_info
     public static $AUTHOR = 'EcAuth';
 
     /** 説明（必須）：プラグインの説明 */
-    public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインと、フロントの B2C ソーシャルログイン（Google / LINE / Facebook 等）を提供します。';
+    public static $DESCRIPTION = 'EcAuth IdP と連携し、管理画面の B2B パスキーログインを提供します。';
 
     /**
      * プラグインURL：プラグインの説明ページなど

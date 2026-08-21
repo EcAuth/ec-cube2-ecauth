@@ -1,6 +1,17 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('EcAuth ソーシャルログイン', () => {
+/**
+ * B2C ソーシャルログイン（OIDC フェデレーション）の E2E。
+ *
+ * B2C は未提供のため、フロントのログインボタンは設定値 `enable_b2c_login`
+ * （既定 false）で抑止されている (#29)。既定状態ではボタンが描画されないため
+ * skip する。B2C を正式提供する際にこの skip を外すこと。
+ *
+ * 手元で動かす場合は dtb_plugin.free_field1 の JSON に
+ * `"enable_b2c_login": true` を追加し、Smarty のコンパイル済みテンプレートを
+ * 削除してから実行する（prefilterTransform はコンパイル時にしか走らない）。
+ */
+test.describe.skip('EcAuth ソーシャルログイン', () => {
   test.beforeEach(async ({ page }) => {
     // マイページログインページへ移動
     await page.goto('/mypage/login.php');
@@ -80,7 +91,8 @@ test.describe('EcAuth ソーシャルログイン', () => {
   });
 });
 
-test.describe('購入手続きページ', () => {
+// shopping/index.tpl 側も同じ enable_b2c_login で抑止される。上と同じ理由で skip。
+test.describe.skip('購入手続きページ', () => {
   test('購入手続きページに EcAuth ボタンが表示される', async ({ page }) => {
     // 商品をカートに入れる（前提条件）
     // この部分は実際の商品IDに応じて調整が必要
