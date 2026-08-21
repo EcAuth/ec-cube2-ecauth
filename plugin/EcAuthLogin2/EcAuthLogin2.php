@@ -151,10 +151,13 @@ class EcAuthLogin2
      */
     protected function doInstall($arrPlugin)
     {
+        // 検証は DB スキーマ変更より前に済ませる。後段で失敗すると、追加済みの
+        // カラムと初期設定だけが残った中途半端な状態になるため。
+        $this->verifyRequiredFiles();
+
         $this->ensureEcAuthSubjectColumn('dtb_customer');
         $this->ensureEcAuthSubjectColumn('dtb_member', true);
         $this->initializeDefaultConfig();
-        $this->verifyRequiredFiles();
         $this->copyPluginFiles();
         // 1.0.4 以前が入っていた環境に上書きインストールした場合の残骸を掃除する。
         $this->removeLegacyClassFiles();
@@ -515,10 +518,28 @@ class EcAuthLogin2
      */
     protected function verifyRequiredFiles()
     {
+        // 一覧そのものが壊れていると検証が素通りする。空配列なら foreach が
+        // 0 回で終わり、途中で切れたファイルは require が 1 を返して警告だけ出る。
+        // どちらも「検証した」ことにはならないので、先に一覧の体裁を確かめる。
+        // plugin_update::update() 側と同じ扱いに揃えている。
+        $manifestPath = __DIR__ . '/required_files.php';
+        if (!is_file($manifestPath)) {
+            $message = '[EcAuthLogin2] Required file manifest missing: ' . $manifestPath;
+            error_log($message);
+            throw new RuntimeException($message);
+        }
+
+        $requiredFiles = static::getRequiredFiles();
+        if (!is_array($requiredFiles) || $requiredFiles === array()) {
+            $message = '[EcAuthLogin2] Required file manifest is invalid: ' . $manifestPath;
+            error_log($message);
+            throw new RuntimeException($message);
+        }
+
         $base = PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/';
 
         $missing = array();
-        foreach (self::getRequiredFiles() as $relative) {
+        foreach ($requiredFiles as $relative) {
             if (!is_file($base . $relative)) {
                 $missing[] = $relative;
             }
