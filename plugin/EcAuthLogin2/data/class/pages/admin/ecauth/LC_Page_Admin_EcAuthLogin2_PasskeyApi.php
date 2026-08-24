@@ -17,7 +17,7 @@
  */
 
 require_once CLASS_EX_REALDIR . 'page_extends/admin/LC_Page_Admin_Ex.php';
-require_once CLASS_REALDIR . 'helper/SC_Helper_EcAuthLogin2.php';
+require_once __DIR__ . '/../../../helper/SC_Helper_EcAuthLogin2.php';
 
 class LC_Page_Admin_EcAuthLogin2_PasskeyApi extends LC_Page_Admin_Ex
 {

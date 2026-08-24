@@ -97,7 +97,12 @@ ec-cube2-ecauth/
 ├── plugin/EcAuthLogin2/                     # ★ プラグイン本体（tar.gz の中身）
 │   ├── EcAuthLogin2.php                     # メインクラス（install/uninstall/フック）
 │   ├── plugin_info.php                      # プラグイン情報（PLUGIN_CODE 等）
-│   ├── data/class/
+│   ├── plugin_update.php                    # アップデート処理（ファイル再配置）
+│   ├── config.php                           # プラグイン管理「設定」リンクのターゲット
+│   ├── filemap.php                          # ファイル配置表
+│   ├── filemap_legacy.php                   # 1.0.4 以前の旧配置（削除対象）の一覧
+│   ├── required_files.php                   # 配置せずここから直接読むファイルの検証用一覧
+│   ├── data/class/                          # ← EC-CUBE 本体へはコピーせず、ここから直接読む
 │   │   ├── helper/SC_Helper_EcAuthLogin2.php           # EcAuth API クライアント + 共通処理
 │   │   └── pages/
 │   │       ├── ecauth/                                  # フロント側ページクラス
@@ -115,12 +120,10 @@ ec-cube2-ecauth/
 │   │   │   └── passkey/
 │   │   │       ├── authenticate-options.php
 │   │   │       └── authenticate-verify.php
-│   │   ├── admin/ecauth/                               # 管理画面 URL（/admin/ecauth/*.php）
-│   │   │   ├── passkey.php
-│   │   │   └── api/{verify-password,register-options,register-verify}.php
-│   │   └── plugin/EcAuthLogin2/config.php              # プラグイン管理「設定」リンクのターゲット
+│   │   └── admin/ecauth/                               # 管理画面 URL（/admin/ecauth/*.php）
+│   │       ├── passkey.php
+│   │       └── api/{verify-password,register-options,register-verify}.php
 │   ├── templates/
-│   │   ├── default/plg_EcAuthLogin2_*.tpl              # フロントテンプレート
 │   │   └── admin/plg_EcAuthLogin2_admin_*.tpl          # 管理画面テンプレート
 │   └── tools/install-plugin.php                        # ★ 開発環境専用 CLI インストーラ
 ├── tools/build-archive.sh                              # tar.gz アーカイブビルド
@@ -130,6 +133,50 @@ ec-cube2-ecauth/
 ├── tests/                                              # Playwright E2E
 └── .github/workflows/e2e-web-install.yml               # tar.gz Web インストール経路の CI
 ```
+
+## インストール時のファイル配置
+
+インストール／アップデート時に EC-CUBE 本体のディレクトリツリーへコピーされるのは、
+**Web 公開が必要なエントリポイントとロゴだけ**（配置表は `filemap.php`）。
+
+| プラグイン内パス | 配置先 | 理由 |
+|---|---|---|
+| `html/ecauth/*.php` | `html/ecauth/` | フロントの公開 URL |
+| `html/admin/ecauth/*.php` | `html/<ADMIN_DIR>/ecauth/` | 管理画面の URL。後述のとおり `ADMIN_DIR` 配下である必要がある |
+| `logo.png` | `html/plugin/EcAuthLogin2/` | プラグイン管理画面のロゴ（本体仕様の配置先） |
+
+**クラスファイル（`data/class/` 配下）はコピーしない。** `PLUGIN_UPLOAD_REALDIR`
+（= `data/downloads/plugin/EcAuthLogin2/`）に置いたまま、各エントリポイントから
+直接 `require_once` する。`config.php` と `templates/` も同様に、本体が
+`PLUGIN_UPLOAD_REALDIR` から直接読む。
+
+配置表に載らないファイルはインストール時の存在検証も効かないため、`required_files.php`
+に一覧を持ち、インストール／アップデートの適用前に検証する。欠けたアーカイブで
+「成功」と表示されたまま、実行時に `require_once` で fatal error になるのを防ぐ。
+
+対象はプラグイン本体クラス（`EcAuthLogin2.php`）、`data/class/` 配下、`config.php`、
+`filemap_legacy.php`、管理画面テンプレート。アップデートは `copyDirectory()` による
+マージコピーなので、アーカイブから欠けたファイルは旧バージョンのものが残り、
+`dtb_plugin` のバージョンだけ上がって新旧が混在する。それを適用前に止める。
+
+1.0.4 以前は `data/class/` へコピーしていたが、コアのディレクトリツリーを汚染するうえ、
+本体が提供する `SC_Plugin_Installer::copyFile()` / `copyDirectory()` のコピー先は
+`html/plugin/<plugin_code>/` に固定されており、そもそも本体のインストール API では
+実現できない配置だった。1.0.5 でコピーを廃止し、旧バージョンが配置した残骸は
+アップデート／アンインストール時に `filemap_legacy.php` を元に削除する。
+
+### 管理画面エントリポイントを `html/plugin/` へ移さない理由
+
+EC-CUBE 2 の管理画面認証は `data/require_base.php` から呼ばれる
+`SC_Helper_Session::adminAuthorization()` が担っており、その判定は
+**スクリプトの物理パスが `html/<ADMIN_DIR>/` 配下にあるか**で行われる。
+`html/plugin/` 配下に置くとこの一括認証を素通りする。
+
+`LC_Page_Admin::init()` には「`ADMIN_DIR` 以外からのリクエストは認証を要求する」
+補完的な分岐があるが、これはリリースとしては **EC-CUBE 2.17.2 が初出**で、
+2.17.0 / 2.17.1 には存在しない。それらのバージョンでは無認証でアクセス可能な
+管理画面 API になってしまうため、管理画面のエントリポイントは
+`html/<ADMIN_DIR>/` 配下に配置する。
 
 ## DB スキーマ拡張
 

@@ -4,7 +4,7 @@
  * EcAuthLogin2 プラグイン情報クラス
  *
  * @package EcAuthLogin2
- * @version 1.0.4
+ * @version 1.0.5
  */
 class plugin_info
 {
@@ -18,7 +18,7 @@ class plugin_info
     public static $CLASS_NAME = 'EcAuthLogin2';
 
     /** プラグインバージョン（必須）：プラグインのバージョン */
-    public static $PLUGIN_VERSION = '1.0.4';
+    public static $PLUGIN_VERSION = '1.0.5';
 
     /**
      * 対応バージョン（必須）：対応するEC-CUBEバージョン

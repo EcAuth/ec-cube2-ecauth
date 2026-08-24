@@ -20,7 +20,7 @@ if (!empty($_SERVER['HTTP_X_CSRF_TOKEN']) && empty($_POST['transactionid'])) {
 
 require_once realpath(__DIR__ . '/../../..') . '/require.php';
 require_once HTML_REALDIR . ADMIN_DIR . 'require.php';
-require_once CLASS_REALDIR . 'pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php';
+require_once PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/data/class/pages/admin/ecauth/LC_Page_Admin_EcAuthLogin2_PasskeyApi.php';
 
 $objPage = new LC_Page_Admin_EcAuthLogin2_PasskeyApi('register-options');
 $objPage->init();
