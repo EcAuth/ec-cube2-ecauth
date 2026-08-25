@@ -25,8 +25,43 @@
  */
 class EcAuthLogin2
 {
+    /**
+     * 管理画面のパスワード認証を無効化する定数の名前。
+     *
+     * data/config/config.php で定義する。プラグイン設定 (dtb_plugin.free_field1)
+     * ではなくファイル側に置くのは、管理画面を奪われた攻撃者に無効化を
+     * 解除させないため。EC-CUBE 4 系プラグイン (EcAuthLogin43) の
+     * 環境変数 ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN と同じ名前・同じ役割。
+     *
+     * @see isAdminPasswordLoginDisabled()
+     */
+    public const DISABLE_ADMIN_PASSWORD_LOGIN = 'ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN';
+
+    /**
+     * ログイン画面へ差し込むスクリプトに埋めるプレースホルダ。
+     *
+     * prefilterTransform はコンパイル時にしか走らないため、ここで状態を
+     * 焼き込むと templates_c が残る限り古いままになる。プレースホルダのまま
+     * コンパイルさせ、毎リクエスト走る outputfilterTransform で置換する。
+     *
+     * @see outputfilterTransform()
+     */
+    public const PLACEHOLDER_PASSWORD_LOGIN_DISABLED = '%%ECAUTH_PASSWORD_LOGIN_DISABLED%%';
+    public const PLACEHOLDER_PASSWORD_LOGIN_REJECTED = '%%ECAUTH_PASSWORD_LOGIN_REJECTED%%';
+
     /** @var array プラグイン情報 */
     protected $arrSelfInfo;
+
+    /**
+     * このリクエストでパスワードログインを拒否したか。
+     *
+     * onAdminLoginActionBefore() が立て、outputfilterTransform() が読む。
+     * どちらも SC_Helper_Plugin::load() が生成した同一インスタンスに
+     * バインドされるため、インスタンスプロパティで受け渡せる。
+     *
+     * @var bool
+     */
+    protected $adminPasswordLoginRejected = false;
 
     /**
      * ファイル配置表を取得する。
@@ -214,6 +249,183 @@ class EcAuthLogin2
     // ========================================================================
     // フックポイント
     // ========================================================================
+    /**
+     * 管理画面ログインのローカルフック (LC_Page_Admin_Index_action_before)。
+     *
+     * 無効化されている場合に、本体の認証処理へ入る前にログインを取り止める。
+     *
+     * ここを差し込み位置に選んだ理由:
+     *  - LC_Page_Admin::init() は doValidToken(true) で CSRF を検証した**後**に
+     *    このフックを発火し、その後 process() が action() を呼ぶ。つまり
+     *    「CSRF 検証済み・パスワード照合前」に割り込める。
+     *  - LC_Page_Admin_Index::lfIsLoginMember() より前で止まるため、
+     *    dtb_member を引かない。拒否時の応答時間や挙動から
+     *    「その login_id が存在するか」を推測されない。
+     *  - 管理画面ログインのパスワード認証は本体では
+     *    LC_Page_Admin_Index::action() の mode=login 経路の 1 箇所だけなので、
+     *    ここを塞げば管理画面ログインは覆える。
+     *
+     * テンプレートを差し替えないのは、LC_Page_Admin_Index::init() が
+     * parent::init()（このフックの発火元）の**後**に tpl_mainpage を
+     * 'login.tpl' で上書きするため。フックから変更しても効かない。
+     * そこで mode を落として action() のログイン処理へ入らせず、
+     * ログイン画面をそのまま再描画させる（4 系が
+     * CustomUserMessageAuthenticationException でログイン画面へ戻すのと同じ挙動）。
+     *
+     * 表示用の状態を $objPage に持たせない（＝ Smarty へ渡さない）のは、
+     * 本体のページクラスが宣言していないプロパティを足すことになり、
+     * PHP 8.2 以降で「Creation of dynamic property ... is deprecated」が出るため。
+     * 本体は error_reporting(E_ALL & ~E_NOTICE & ~E_USER_NOTICE) で
+     * E_DEPRECATED を拾って data/logs/error.log へ書くので、管理ログイン画面を
+     * 開くたびにログが積まれることになる（#27 と同種）。
+     * 表示制御は outputfilterTransform() のプレースホルダ置換で行う。
+     *
+     * @param LC_Page_Admin_Index $objPage
+     *
+     * @return void
+     */
+    public function onAdminLoginActionBefore($objPage)
+    {
+        if (!self::isAdminPasswordLoginDisabled() || !self::isPasswordLoginAttempt()) {
+            return;
+        }
+
+        // 本体も lfSetIncorrectData() で失敗時の login_id を記録している
+        // （'<login_id> password incorrect.'）ので、ここで残しても新たな
+        // 情報露出にはならない。無効化後も試行が続いているかの判断に要る。
+        GC_Utils_Ex::gfPrintLog(
+            self::sanitizeForLog(isset($_POST['login_id']) ? $_POST['login_id'] : '')
+            .' rejected: admin password login is disabled by '.self::DISABLE_ADMIN_PASSWORD_LOGIN
+        );
+
+        // LC_Page::getMode() は $_REQUEST['mode'] しか見ないが、
+        // variables_order の設定に依らず確実に落とすため 3 つとも消す。
+        unset($_REQUEST['mode'], $_POST['mode'], $_GET['mode']);
+
+        $this->adminPasswordLoginRejected = true;
+    }
+
+    /**
+     * Smarty テンプレートの出力フィルタ。
+     *
+     * ログイン画面へ差し込んだスクリプトのプレースホルダを、このリクエストの
+     * 状態で置き換える。prefilterTransform と違い**毎リクエスト走る**ため、
+     * templates_c にコンパイル結果が残っていても現在の設定が反映される。
+     * 「config.php の定数を消してパスワードログインへ戻す」緊急復旧で
+     * フォームが隠れたままにならないために、この性質が要る。
+     *
+     * $filename では判定しない。出力フィルタが受け取るのは描画された最終 HTML で、
+     * ファイル名はフレーム側（login_frame.tpl）になる。フレーム名はエラー画面とも
+     * 共通で、本体の LOGIN_FRAME 定数にも依存する。プレースホルダ自体の有無を見る方が
+     * 対象を取り違えず、無関係なページでは strpos 1 回で抜けられる。
+     *
+     * 置換されなかった場合（このフックが未登録の古いインストール等）、
+     * JS 側の比較は false になり「無効化されていない」と扱われる。UI は
+     * フェイルオープンだが、拒否そのものは onAdminLoginActionBefore() が
+     * 独立して行うので認証は緩まない。
+     *
+     * @param string $source 描画済みの HTML
+     * @param LC_Page_Ex $objPage
+     * @param string $filename
+     *
+     * @return void
+     */
+    public function outputfilterTransform(&$source, $objPage, $filename)
+    {
+        if (strpos($source, self::PLACEHOLDER_PASSWORD_LOGIN_DISABLED) === false) {
+            return;
+        }
+
+        $source = str_replace(
+            array(
+                self::PLACEHOLDER_PASSWORD_LOGIN_DISABLED,
+                self::PLACEHOLDER_PASSWORD_LOGIN_REJECTED,
+            ),
+            array(
+                self::isAdminPasswordLoginDisabled() ? '1' : '0',
+                $this->adminPasswordLoginRejected ? '1' : '0',
+            ),
+            $source
+        );
+    }
+
+    /**
+     * 管理画面のパスワード認証が無効化されているか。
+     *
+     * 未定義なら false（＝従来どおりパスワードでログインできる）。
+     * 定数を書いていないだけの環境で管理者が締め出されてはいけないので、
+     * 既定は「無効化しない」に倒す。無効化は明示的な意思表示に限る。
+     *
+     * @return bool
+     */
+    public static function isAdminPasswordLoginDisabled()
+    {
+        if (!defined(self::DISABLE_ADMIN_PASSWORD_LOGIN)) {
+            return false;
+        }
+
+        return self::normalizeDisableFlag(constant(self::DISABLE_ADMIN_PASSWORD_LOGIN));
+    }
+
+    /**
+     * 定数値を真偽値へ正規化する。
+     *
+     * 有効値は true / 1 / '1' / 'true' / 'on' / 'yes'（FILTER_VALIDATE_BOOLEAN の
+     * 受け付ける表記）。それ以外はすべて「無効化しない」に倒す。
+     *
+     * 書き間違えると無効化したつもりで有効のまま、という失敗があり得るため、
+     * 設定画面 (LC_Page_Admin_EcAuthLogin2_Config) に解決後の状態を表示して
+     * 目視で確認できるようにしてある。
+     *
+     * @param mixed $value
+     *
+     * @return bool
+     */
+    public static function normalizeDisableFlag($value)
+    {
+        if (is_array($value) || is_object($value)) {
+            return false;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * 現在のリクエストが管理画面ログインの送信か。
+     *
+     * @return bool
+     */
+    protected static function isPasswordLoginAttempt()
+    {
+        foreach (array($_REQUEST, $_POST, $_GET) as $params) {
+            if (isset($params['mode']) && $params['mode'] === 'login') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ログへ書く前に制御文字を落として長さを切り詰める。
+     *
+     * login_id は利用者入力なので、改行を含んだ値をそのまま書くと
+     * ログの 1 行を偽装できてしまう。
+     *
+     * @param mixed $value
+     *
+     * @return string
+     */
+    protected static function sanitizeForLog($value)
+    {
+        if (!is_string($value)) {
+            return '';
+        }
+        $sanitized = preg_replace('/[\x00-\x1f\x7f]/', '', $value);
+
+        return mb_substr((string) $sanitized, 0, 50, 'UTF-8');
+    }
+
     /**
      * Smarty テンプレートのプレフィルタ。
      * - フロントの mypage/login.tpl と shopping/index.tpl に B2C ログインボタンを差し込む

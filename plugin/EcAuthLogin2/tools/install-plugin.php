@@ -85,6 +85,27 @@ if (empty($plugin)) {
     fwrite(STDOUT, "Executed EcAuthLogin2::install()\n");
 } else {
     fwrite(STDOUT, "Plugin already registered; running install() to ensure files are in place\n");
+
+    // フックポイントを毎回張り直す。dtb_plugin_hookpoint はインストール時に
+    // 書き込まれるだけなので、既存の開発 DB を使い回していると
+    // plugin_info::$HOOK_POINTS に足した新しいフックが永久に登録されない。
+    // 本番の管理画面アップデート経路（LC_Page_Admin_OwnersStore::registerData()）は
+    // delete → insert し直すので、同じ挙動に揃えておく。
+    require_once DATA_REALDIR . 'downloads/plugin/' . PLUGIN_CODE . '/plugin_info.php';
+    $objQuery->delete('dtb_plugin_hookpoint', 'plugin_id = ?', array($plugin['plugin_id']));
+    foreach (plugin_info::$HOOK_POINTS as $hook) {
+        $hookpointId = $objQuery->nextVal('dtb_plugin_hookpoint_plugin_hookpoint_id');
+        $objQuery->insert('dtb_plugin_hookpoint', array(
+            'plugin_hookpoint_id' => $hookpointId,
+            'plugin_id' => $plugin['plugin_id'],
+            'hook_point' => $hook[0],
+            'callback' => $hook[1],
+            'use_flg' => 1,
+            'update_date' => 'CURRENT_TIMESTAMP',
+        ));
+    }
+    fwrite(STDOUT, "Re-registered hook points\n");
+
     require_once DATA_REALDIR . 'downloads/plugin/' . PLUGIN_CODE . '/EcAuthLogin2.php';
     EcAuthLogin2::install((array) $plugin);
 }

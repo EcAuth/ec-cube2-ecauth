@@ -162,6 +162,92 @@ $source = $objTransform->getHTML();
 
 セレクタは**タグ名・ID 名・クラス名のみ**対応（マニュアル 4-1）。
 
+### 管理画面ログインへの割り込みは LC_Page_Admin_Index_action_before
+
+管理画面のパスワード認証は本体では `LC_Page_Admin_Index::lfIsLoginMember()` の 1 箇所だけで、
+`mode=login` の POST でしかそこへ到達しない。割り込み位置は
+`LC_Page_Admin_Index_action_before`（`EcAuthLogin2::onAdminLoginActionBefore()`）。
+
+`LC_Page_Admin::init()` は `parent::init()`（＝ `LC_Page::init()`）を呼ばないが、
+**ローカルフックの発火は自前で書いてある**ので、管理画面ページでもフックは効く。
+
+```php
+// LC_Page_Admin::init() の末尾
+$this->doValidToken(true);   // ← CSRF 検証はフックより前
+$this->setTokenTo();
+$parent_class_name = get_parent_class($this);          // LC_Page_Admin_Index
+$objPlugin->doAction($parent_class_name.'_action_before', [$this]);
+```
+
+`$this` は `LC_Page_Admin_Index_Ex` なので `get_parent_class()` は `LC_Page_Admin_Index`。
+`_Ex` 側の名前でも発火するが、両方を購読すると 2 回呼ばれる。
+
+この位置の性質:
+
+- `init()` → `process()` → `action()` の順なので、**パスワード照合の前**に止められる
+- `doValidToken(true)` の後なので **CSRF は検証済み**
+- `dtb_member` を引く前なので、拒否しても「その `login_id` が存在するか」が漏れない
+
+**フックからテンプレートは差し替えられない。** `LC_Page_Admin_Index::init()` は
+`parent::init()`（フックの発火元）の**後**に `$this->tpl_mainpage = 'login.tpl'` を実行する。
+そのため拒否は「`$_REQUEST` / `$_POST` / `$_GET` の `mode` を落として `action()` の
+ログイン処理へ入らせない」形で行い、ログイン画面をそのまま再描画させている。
+`SC_Utils_Ex::sfDispError(LOGIN_ERROR)` は使わない。文面が
+「ＩＤまたはパスワードが正しくありません」で、事実と違うため。
+
+### フックポイントを追加したら「アップデート」を通す
+
+`plugin_info::$HOOK_POINTS` は `dtb_plugin_hookpoint` に永続化される。書き込まれるのは
+インストール時と**アップデート時**で、後者は
+`LC_Page_Admin_OwnersStore::registerData($info, 'update')` が既存行を delete してから
+新しい `$HOOK_POINTS` で insert し直す。
+
+つまり **tar.gz を手で差し替えただけではフックポイントの追加が反映されない**。
+既存インストールへ新しいフックを届けるには管理画面の「アップデート」を通す必要がある。
+開発環境の CLI インストーラ（`tools/install-plugin.php`）も、登録済みの場合は
+同じように delete → insert し直す（既存 DB を使い回していると新しいフックが
+永久に登録されない穴があったため）。
+
+### 毎リクエスト変わる値は outputfilterTransform で差し替える
+
+`prefilterTransform` はコンパイル時にしか走らない（次項）。差し込む断片に値を埋め込むと
+`templates_c` が残る限り古いままになる。管理画面パスワード認証の状態表示がまさにこれで、
+値を焼き込むと **「`config.php` の定数を消してパスワードログインへ戻す」緊急復旧のときに
+フォームが隠れたまま**になる。
+
+対策は、prefilter では `%%...%%` プレースホルダのままコンパイルさせ、
+**毎リクエスト走る `outputfilterTransform` で置換する**こと
+（`EcAuthLogin2::outputfilterTransform()`）。
+
+出力フィルタで踏んだ点が 2 つある。
+
+1. **`$filename` はフレーム側の名前になる。** 出力フィルタが受け取るのは描画された
+   最終 HTML で、管理ログイン画面では `login.tpl` ではなく **`login_frame.tpl`**
+   （`LOGIN_FRAME`）が渡る。prefilter とは値が違う。フレーム名はエラー画面とも共通なので、
+   判定は `$filename` ではなく**プレースホルダの有無**（`strpos` 1 回）で行う
+2. 出力フィルタはサイト全体の全ページで走る。無関係なページで即座に抜けること
+
+リクエスト内で状態を受け渡す先は**プラグインインスタンスのプロパティ**。
+`SC_Helper_Plugin::load()` が生成したインスタンスに全フックがバインドされるので、
+`LC_Page_Admin_Index_action_before` で立てたフラグを出力フィルタから読める。
+
+### ページオブジェクトに動的プロパティを足さない
+
+`SC_Display::prepare()` → `SC_View::assignobj()` はページオブジェクトの public プロパティを
+すべて Smarty へ assign するので、フックで `$objPage->foo = ...` と置けばテンプレートから
+`$foo` で読める。**が、これはやらない。**
+
+本体のページクラスは 2.25 時点で必要なプロパティをすべて宣言しており
+（`LC_Page::$arrErr` など）、`#[AllowDynamicProperties]` は付いていない。宣言に無い名前を
+足すと PHP 8.2 以降で `Creation of dynamic property ... is deprecated` が出る。
+本体は `SC_Helper_HandleError::load()` で `error_reporting(E_ALL & ~E_NOTICE & ~E_USER_NOTICE)`
+としていて **E_DEPRECATED を拾う**ため、`data/logs/error.log` に画面表示のたびに積まれる
+（#27 と同種の問題）。
+
+なお、`prefilterTransform` で差し込む断片の中の Smarty タグ自体は有効
+（`'pre'` フィルタなのでコンパイル前のソースを書き換えるため、差し込んだタグはコンパイルされる）。
+使えないのは「ページオブジェクト経由で値を渡す」側であって、Smarty タグではない。
+
 ### prefilter はコンパイル時にしか走らない
 
 `prefilterTransform` は Smarty のコンパイル時のみ実行される。`templates_c/` にコンパイル済み

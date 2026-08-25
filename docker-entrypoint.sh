@@ -61,6 +61,37 @@ if [ ! -f "${ECCUBE_DIR}/data/config/config.php" ] && [ "${ECCUBE_INSTALL_SKIP}"
     fi
 fi
 
+# ----- 管理画面パスワード認証の無効化（開発 / CI 専用） ----------------------
+# 本番は data/config/config.php を運営者が直接編集する。ここは
+# 「環境変数で切り替えたい」開発・CI のための橋渡しでしかない。
+#
+# 追記した行はマーカー行とセットで管理し、毎回いったん取り除いてから
+# 必要なときだけ足し直す。こうしておかないと、環境変数を外して再起動しても
+# 前回の追記が残って無効化が解けない（＝緊急復旧の手順を検証できない）。
+# 取り除く対象は自分が書いたマーカー行の直後 1 行だけで、
+# インストーラが書いた既存の設定には触れない。
+CONFIG_FILE="${ECCUBE_DIR}/data/config/config.php"
+CONFIG_MARKER="// ecauth-dev-toggle: ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN"
+
+if [ -f "${CONFIG_FILE}" ]; then
+    if grep -qF "${CONFIG_MARKER}" "${CONFIG_FILE}"; then
+        sed -i "\|${CONFIG_MARKER}|,+1d" "${CONFIG_FILE}"
+    fi
+
+    case "${ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN:-}" in
+        1|true|TRUE|True|on|yes)
+            printf '%s\n%s\n' \
+                "${CONFIG_MARKER}" \
+                "defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') or define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true);" \
+                >> "${CONFIG_FILE}"
+            echo "[ecauth-entrypoint] Admin password login is DISABLED (config.php)"
+            ;;
+        *)
+            echo "[ecauth-entrypoint] Admin password login is enabled (default)"
+            ;;
+    esac
+fi
+
 # ----- プラグイン自動インストール（開発環境専用） ----------------------------
 if [ "${SKIP_PLUGIN_INSTALL}" = "true" ]; then
     echo "[ecauth-entrypoint] SKIP_PLUGIN_INSTALL=true; skipping plugin auto-install"

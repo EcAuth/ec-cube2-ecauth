@@ -4,7 +4,7 @@
  * EcAuthLogin2 プラグイン情報クラス
  *
  * @package EcAuthLogin2
- * @version 1.0.5
+ * @version 1.1.0
  */
 class plugin_info
 {
@@ -18,7 +18,7 @@ class plugin_info
     public static $CLASS_NAME = 'EcAuthLogin2';
 
     /** プラグインバージョン（必須）：プラグインのバージョン */
-    public static $PLUGIN_VERSION = '1.0.5';
+    public static $PLUGIN_VERSION = '1.1.0';
 
     /**
      * 対応バージョン（必須）：対応するEC-CUBEバージョン
@@ -51,8 +51,28 @@ class plugin_info
     /** プラグイン作者URL：作者のサイトURL */
     public static $AUTHOR_SITE_URL = 'https://ec-auth.io/';
 
-    /** フックポイント：フックポイントとコールバック関数を定義 */
+    /**
+     * フックポイント：フックポイントとコールバック関数を定義
+     *
+     * ここに定義した内容は dtb_plugin_hookpoint に永続化される。登録されるのは
+     * インストール時と**アップデート時**で、後者は
+     * LC_Page_Admin_OwnersStore::registerData($info, 'update') が既存行を
+     * delete してから新しい $HOOK_POINTS で insert し直す。
+     *
+     * 逆に言うと、tar.gz を手で差し替えただけではフックポイントの追加が反映
+     * されない。既存インストールへ新しいフックを届けるには、管理画面
+     * 「オーナーズストア > プラグイン管理 > アップデート」を通す必要がある。
+     */
     public static $HOOK_POINTS = array(
         array('prefilterTransform', 'prefilterTransform'),
+        // 管理画面ログインのパスワード認証を無効化するためのローカルフック。
+        // LC_Page_Admin::init() が action() より前に発火させるため、
+        // 本体の認証処理 (LC_Page_Admin_Index::lfIsLoginMember) へ入る前に止められる。
+        // @see EcAuthLogin2::onAdminLoginActionBefore()
+        array('LC_Page_Admin_Index_action_before', 'onAdminLoginActionBefore'),
+        // ログイン画面へ差し込んだスクリプトのプレースホルダを毎リクエスト置換する。
+        // prefilterTransform だけだと templates_c に焼き込まれてしまうため。
+        // @see EcAuthLogin2::outputfilterTransform()
+        array('outputfilterTransform', 'outputfilterTransform'),
     );
 }

@@ -22,6 +22,7 @@ B2C ソーシャルログイン（OIDC フェデレーション）は実装途�
 |---|---|---|
 | 管理画面パスキーログイン | EC-CUBE 管理者 | WebAuthn / FIDO2 + EcAuth /v1/b2b/passkey/* |
 | 管理画面パスキー管理 | EC-CUBE 管理者 | パスワード再認証 + パスキー登録 / 削除 |
+| 管理画面パスワード認証の無効化 | EC-CUBE 管理者 | `data/config/config.php` の定数で切り替え（後述） |
 | 顧客ソーシャルログイン **（未提供）** | EC-CUBE フロント顧客 | OIDC PKCE フロー（Google / LINE 等の外部 IdP）。既定で無効 |
 
 ## インストール
@@ -76,6 +77,9 @@ GitHub Actions の `E2E (Web Install)` ワークフローで、tar.gz を実際�
 - `tests/web-install.spec.ts` — 上記フローのテスト本体
 - `tests/admin-passkey-flow.spec.ts` — `ECAUTH_E2E_ENABLED=1` 時のみ実行。仮想認証器（CDP `WebAuthn` ドメイン）を使ってパスキー登録〜ログインを検証
 - `tests/ecauth-login.spec.ts` — B2C ソーシャルログインフロー
+- `tests/admin-password-disabled.spec.ts` — `ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN` を有効にした状態の検証。
+  EcAuth テナントに接続しないため 1Password のシークレットが不要で、fork PR でも実行される
+  （`.github/workflows/playwright.yml` の `e2e-password-login-disabled` ジョブ）
 
 ローカル実行:
 
@@ -88,6 +92,16 @@ SKIP_PLUGIN_INSTALL=true docker compose up -d --build
 
 # 3. Playwright 実行
 ECCUBE_BASE_URL=https://localhost:8081 npx playwright test tests/web-install.spec.ts
+```
+
+パスワード認証を無効化した状態のローカル実行:
+
+```bash
+# docker-entrypoint.sh がこの環境変数を見て data/config/config.php へ define を追記する。
+# 環境変数を外して起動し直せば元に戻る（追記行はマーカーごと毎回消してから貼り直す）。
+ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN=1 docker compose up -d --build
+
+E2E_ADMIN_PASSWORD_LOGIN_DISABLED=1 npx playwright test tests/admin-password-disabled.spec.ts
 ```
 
 ## ディレクトリ構成
@@ -188,6 +202,65 @@ EC-CUBE 2 の管理画面認証は `data/require_base.php` から呼ばれる
 | `dtb_customer` | `ecauth_subject VARCHAR(255)` | INDEX | B2C ソーシャルログインの subject を顧客と紐付け |
 
 `uninstall()` ではカラムを保持する（データ保護のため）。
+
+## 管理画面のパスワード認証を無効化する
+
+管理画面のログインをパスキーだけに絞り込める。EC-CUBE の `data/config/config.php` に
+次の 1 行を追記する。
+
+```php
+defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') or define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true);
+```
+
+追記後は、管理画面ログインの ID / パスワード欄が表示されなくなり、フォームを直接
+送信しても認証されない。現在の状態はプラグイン設定画面（オーナーズストア >
+プラグイン管理 > プラグイン設定）に表示される。
+
+> **無効化する前に、管理者全員がパスキーを登録済みであることを必ず確認すること。**
+> パスキーを登録していない管理者は、この設定を戻すまで管理画面にログインできない。
+> 新しく作成した管理者アカウントも同様にログインできない。
+
+元に戻すときは追記した行を削除するかコメントアウトする。データベースの変更も
+キャッシュの削除も不要で、次のリクエストから元どおりパスワードでログインできる。
+
+有効値は `true` / `1` / `'1'` / `'true'` / `'on'` / `'yes'`。それ以外の値と未定義は
+「無効化しない」として扱う。書き間違えると無効化されないため、設定画面の状態表示で
+確認すること。
+
+### この機構で防げること / 防げないこと
+
+**防げること**
+
+- 漏洩・推測されたパスワードでの管理画面ログイン
+- 不正に作成された管理者アカウントでのログイン（パスキーが登録されていないため）
+
+**防げないこと**
+
+- **プラグインを無効化された場合。** 拒否はプラグインのフックポイントで行うため、
+  `dtb_plugin.enable` を書き換えてプラグインを無効化されると、この機構は働かなくなる。
+  つまりデータベースを直接書き換えられる攻撃者は迂回できる。
+  防げるのは「管理画面から入ってくる攻撃者」であって、DB やファイルを直接触れる
+  攻撃者ではない。
+- **`data/config/config.php` を書き換えられた場合。** 同上。
+- **EC-CUBE 本体の Web API（`SC_Api_Operation`）による管理者認証。**
+  `API_AUTH_TYPE_MEMBER` は `dtb_member` のパスワードで認証するため、この機構では
+  塞がない。ただし `API_ENABLE_FLAG` は既定で `false` であり、有効化していなければ
+  この経路は存在しない。Web API を使う場合は `mtb_api_config` の認証方式を
+  見直すこと。
+- **パスキー登録時のパスワード再認証。** パスキー管理画面での登録は、これまでどおり
+  パスワードの再入力を求める。これはログイン経路ではなく（既存の管理者セッションが
+  無いと到達できない）、塞ぐとパスキーでログイン中の管理者が 2 つ目のパスキーを
+  登録できなくなり、締め出しのリスクがかえって上がるため残している。
+
+### なぜプラグイン設定ではなくファイルの定数なのか
+
+`dtb_plugin.free_field1` に持たせると、管理画面を奪われた攻撃者が設定画面から
+無効化を解除できてしまい、対策として成立しない。ファイルを書ける権限がなければ
+戻せない、という性質そのものがこの機能の価値なので、切り替えは
+`data/config/config.php` に置き、設定画面では状態の表示だけを行う。
+
+EC-CUBE 4 系プラグイン（`EcAuthLogin43`）では同じ役割を環境変数
+`ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN` が担う。名前を揃えてある。
 
 ## 設定値
 

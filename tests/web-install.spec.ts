@@ -140,6 +140,14 @@ test.describe.serial('Web インストール経路スモーク', () => {
     await expect(page.locator('body')).toContainText('EcAuth Login プラグイン設定');
     await expect(page.locator('input[name="client_id"]')).toBeVisible();
     await expect(page.locator('input[name="client_secret"]')).toBeVisible();
+
+    // 管理画面パスワード認証の状態表示。この環境では
+    // ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN を設定していないので「有効」であること。
+    // プラグインを入れただけで締め出しが起きないことの回帰テストでもある。
+    // 無効化した状態の検証は tests/admin-password-disabled.spec.ts が担当する。
+    const status = page.locator('#ecauth-password-login-status');
+    await expect(status).toBeVisible();
+    await expect(status).toHaveAttribute('data-status', 'enabled');
   });
 
   test('スモーク: 管理画面パスキー登録 UI が開く', async ({ page }) => {
