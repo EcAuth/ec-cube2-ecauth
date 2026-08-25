@@ -58,6 +58,10 @@ test.describe('E2E: 管理画面のパスワード認証を無効化した状態
     // フォームは隠れているので、古いタブや直接 POST を模して
     // JS で値を入れて submit する。認証情報自体は正しいものを使う
     // （「無効化しているから落ちた」のか「単に間違えた」のかを切り分けるため）。
+    // ナビゲーション待機は submit より前に登録する。submit 後に
+    // waitForLoadState('load') を呼ぶと、送信前のページが既に load 済みなので
+    // 直ちに resolve し、POST の応答を待たずに後続のアサーションが走りうる。
+    const navigation = page.waitForNavigation({ waitUntil: 'load' });
     await page.evaluate(
       ({ loginId, password }) => {
         const form = document.querySelector<HTMLFormElement>('form[name="form1"]');
@@ -68,7 +72,7 @@ test.describe('E2E: 管理画面のパスワード認証を無効化した状態
       },
       { loginId: ADMIN_LOGIN_ID, password: ADMIN_PASSWORD },
     );
-    await page.waitForLoadState('load');
+    await navigation;
 
     // 管理画面ホームへ入れていないこと。
     expect(page.url()).not.toContain('home.php');

@@ -206,13 +206,15 @@ jobs:
             exit 1
           fi
 
-      - name: Verify the constant landed in config.php
+      - name: Verify the constant is defined when config.php is evaluated
         # 「無効化していたつもりで実は有効だった」状態でテストが通ると、
         # 検証したことにならない。前提そのものを先に確かめる。
+        # grep で文字列の有無を見るのではなく PHP として評価する。config.php が
+        # 閉じタグ (?>) で終わっていると、追記した define() は PHP の外に出て
+        # 文字列としては存在するのに定数は立たない、という状態になりうるため。
         run: |
-          docker compose exec -T ec-cube \
-            grep -F "define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true)" \
-            /var/www/app/data/config/config.php
+          docker compose exec -T ec-cube php -r \
+            "require '/var/www/app/data/config/config.php'; exit(defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') && ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN ? 0 : 1);"
 
       - name: Run Playwright disabled-password-login checks
         run: npx playwright test tests/admin-password-disabled.spec.ts --reporter=list

@@ -212,6 +212,10 @@ EC-CUBE 2 の管理画面認証は `data/require_base.php` から呼ばれる
 defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') or define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true);
 ```
 
+`config.php` の末尾が PHP の閉じタグ `?>` で終わっている場合は、**閉じタグより前**に
+追記すること。閉じタグの後ろに書くと PHP として評価されず、定数は定義されない
+（設定画面の状態表示が「有効」のままになるので気付ける）。
+
 追記後は、管理画面ログインの ID / パスワード欄が表示されなくなり、フォームを直接
 送信しても認証されない。現在の状態はプラグイン設定画面（オーナーズストア >
 プラグイン管理 > プラグイン設定）に表示される。

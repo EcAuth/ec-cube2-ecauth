@@ -80,11 +80,27 @@ if [ -f "${CONFIG_FILE}" ]; then
 
     case "${ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN:-}" in
         1|true|TRUE|True|on|yes)
+            # 末尾が PHP の閉じタグ (?>) で終わっていると、追記した define() は
+            # PHP の外に出て「レスポンス本文に文字列として出力されるだけ」になり、
+            # 定数は定義されない。本体のインストーラ (2.25 の Web インストーラ /
+            # eccube_install.sh) は閉じタグを書かないが、運営者が手で編集した
+            # ファイルには残っていることがある。閉じタグが最終行なら取り除いてから足す。
+            if [ "$(tail -n 1 "${CONFIG_FILE}" | tr -d '[:space:]')" = "?>" ]; then
+                sed -i '$ d' "${CONFIG_FILE}"
+            fi
             printf '%s\n%s\n' \
                 "${CONFIG_MARKER}" \
                 "defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') or define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true);" \
                 >> "${CONFIG_FILE}"
-            echo "[ecauth-entrypoint] Admin password login is DISABLED (config.php)"
+            # 「ファイルに文字列がある」ではなく「PHP として評価して定数が立つ」ことを
+            # 確かめる。閉じタグ問題のように、書いてあるのに効いていない状態を
+            # 起動ログの段階で検出するため。
+            if php -r "require '${CONFIG_FILE}'; exit(defined('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN') && ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN ? 0 : 1);" >/dev/null 2>&1; then
+                echo "[ecauth-entrypoint] Admin password login is DISABLED (config.php)"
+            else
+                echo "[ecauth-entrypoint] ERROR: ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN was appended but is not defined when config.php is evaluated" >&2
+                exit 1
+            fi
             ;;
         *)
             echo "[ecauth-entrypoint] Admin password login is enabled (default)"
