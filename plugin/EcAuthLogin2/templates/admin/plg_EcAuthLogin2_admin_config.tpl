@@ -136,6 +136,34 @@
         </div>
     </form>
 
+    <!--{*
+     * 管理画面のパスワード認証の状態。読み取り専用。
+     *
+     * 切り替えを画面から行えるようにしない（＝ dtb_plugin に持たせない）のは、
+     * 管理画面を奪われた攻撃者に無効化を解除させないため。ファイル
+     * (data/config/config.php) を書ける権限がなければ戻せない、という
+     * 性質そのものがこの機能の価値なので、ここでは状態の表示だけに留める。
+     *
+     * 表示する目的は、定数の書き方を誤って「無効化したつもりで有効のまま」に
+     * なっていないかを運営者が目視で確認できるようにすること。
+     *}-->
+    <div class="card" style="margin-top: 2em; padding: 1em; background: #f8f9fa; border-radius: 4px;">
+        <h3>管理画面のパスワード認証</h3>
+        <p style="margin-bottom: 0.8em;">
+            現在の状態:
+            <!--{if $password_login_disabled}-->
+            <strong id="ecauth-password-login-status" data-status="disabled" style="color: #e60012;">無効化中（パスキーのみ）</strong>
+            <!--{else}-->
+            <strong id="ecauth-password-login-status" data-status="enabled">有効（ID とパスワードでログインできます）</strong>
+            <!--{/if}-->
+        </p>
+
+        <p style="margin-bottom: 0.5em;">この設定はこの画面からは変更できません。EC-CUBE の <strong style="font-weight: normal;">data/config/config.php</strong> に次の 1 行を追記すると、管理画面のパスワードログインを無効化できます。</p>
+        <pre style="margin: 0 0 0.8em; padding: 0.6em; background: #fff; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto; font-size: 0.85em;">defined('<!--{$password_login_const_name|h}-->') or define('<!--{$password_login_const_name|h}-->', true);</pre>
+        <p style="color: #666; font-size: 0.9em; margin-bottom: 0.5em;">元に戻すときは、この行を削除するかコメントアウトしてください。データベースの変更は不要です。</p>
+        <p style="color: #e60012; font-size: 0.9em; margin-bottom: 0;">無効化する前に、管理者全員がパスキーを登録済みであることを必ず確認してください。パスキーを登録していない管理者は、この設定を戻すまで管理画面にログインできなくなります。</p>
+    </div>
+
     <!--{if $has_client_secret}-->
     <div class="card" style="margin-top: 2em; padding: 1em; background: #f8f9fa; border-radius: 4px;">
         <h3>次のステップ</h3>

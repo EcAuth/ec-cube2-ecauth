@@ -12,6 +12,10 @@
 
 require_once CLASS_EX_REALDIR . 'page_extends/admin/LC_Page_Admin_Ex.php';
 require_once __DIR__ . '/../../../helper/SC_Helper_EcAuthLogin2.php';
+// プラグインが有効なら SC_Helper_Plugin::load() が読み込み済みだが、
+// この画面はプラグイン管理から load_plugin_config.php 経由で開かれ、
+// 無効状態でも到達しうる。パスワード認証の状態表示に使うため明示的に読む。
+require_once PLUGIN_UPLOAD_REALDIR . 'EcAuthLogin2/EcAuthLogin2.php';
 
 /**
  * EcAuthLogin2 設定画面。
@@ -42,6 +46,24 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
      * @var string
      */
     public $saved_client_id;
+
+    /**
+     * 管理画面のパスワード認証が無効化されているか（読み取り専用の表示用）。
+     *
+     * 切り替えは data/config/config.php の定数で行うため、この画面からは変更できない。
+     * 表示する目的は、定数の書き方を間違えて「無効化したつもりで有効のまま」に
+     * なっていないかを目視で確認できるようにすること。
+     *
+     * @var bool
+     */
+    public $password_login_disabled;
+
+    /**
+     * 上記を切り替える定数の名前。画面に手順を出すために渡す。
+     *
+     * @var string
+     */
+    public $password_login_const_name;
 
     public function init()
     {
@@ -98,6 +120,9 @@ class LC_Page_Admin_EcAuthLogin2_Config extends LC_Page_Admin_Ex
         $signupUrls = $objHelper->getSignupUrls();
         $this->signup_url = $signupUrls['signup'];
         $this->mypage_url = $signupUrls['mypage'];
+
+        $this->password_login_disabled = EcAuthLogin2::isAdminPasswordLoginDisabled();
+        $this->password_login_const_name = EcAuthLogin2::DISABLE_ADMIN_PASSWORD_LOGIN;
     }
 
     /**

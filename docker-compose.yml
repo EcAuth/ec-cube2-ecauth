@@ -59,6 +59,11 @@ services:
       # サフィックスを許可すると、そのサービスの全利用者を信頼することになり、
       # EcAuthDocs #101 の修正の意味が失われる。
       ECAUTH_ALLOWED_HOSTS: ${ECAUTH_ALLOWED_HOSTS:-.ec-auth.io}
+      # 管理画面のパスワード認証を無効化する（開発 / CI 専用の入口）。
+      # docker-entrypoint.sh がこの値を見て data/config/config.php へ
+      # define('ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN', true) を追記する。
+      # 本番は config.php を直接編集する運用で、この環境変数は使わない。
+      ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN: ${ECAUTH_DISABLE_ADMIN_PASSWORD_LOGIN:-}
       # CI 用フラグ（docker-entrypoint.sh が読む）
       # SKIP_PLUGIN_INSTALL=true で entrypoint のプラグイン CLI 自動インストールを抑止し、
       # Web インストール経路のテスト（e2e-web-install.yml）を可能にする
