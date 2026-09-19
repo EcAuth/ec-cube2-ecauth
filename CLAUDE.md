@@ -294,6 +294,26 @@ EcAuth 側のログに `Failed to create or retrieve B2BUser: <uuid>` が出て�
 UPDATE dtb_member SET ecauth_subject = NULL, update_date = CURRENT_TIMESTAMP WHERE member_id = 123;
 ```
 
+### external_id は `member:{member_id}`、表示名は `user_name`（EcAuthDocs#110）
+
+`register/options` に渡す `external_id` は、EcAuth が発行元（`client_id`）ごとにハッシュ化して
+保持し「同じ値なら同じ管理者」と解決するキー。**1.1.0 までは `login_id` を送っていた**が、
+管理画面から変更できる値なので恒久キーにならず、1.1.1 から
+`SC_Helper_EcAuthLogin2::buildExternalId()` が組み立てる `member:{dtb_member.member_id}` に変えた。
+接頭辞は、旧バージョンが送った数字のみの `login_id` のハッシュと衝突させないためのもの
+（根拠はメソッドの docblock）。4 系プラグイン（`Service/B2BExternalId`）も同じ形式で、
+**変えると既存の identity と一致しなくなる**。`tests/Unit/ExternalIdTest.php` で固定。
+
+認証器・パスキー管理画面に表示されるアカウント名（WebAuthn `user.name`）は EcAuth が
+`external_id` から作っていたため、`member:2` が表示されないよう `user_name` に `login_id` を
+別途渡す（EcAuth#544 で追加された任意項目）。`tests/admin-passkey-flow.spec.ts` の
+「パスキーを新規登録する」が `options.user.name === login_id` を検証している。
+
+移行の挙動: 旧 `hash(login_id)` の identity は EcAuth 側に残り、更新後に管理者が次にパスキーを
+追加した時点で `hash(member:{member_id})` の identity が**追加**される（同一 subject の下に共存）。
+それまでの間に `ecauth_subject` を失う操作（再インストール・`client_id` 変更）をすると、
+`external_id` によるフォールバックが効かず新しい B2BUser が作られ、旧パスキーは再登録になる。
+
 ### リダイレクトで終わるページは skip_load_page_layout を立てる
 
 `LC_Page::init()` は `skip_load_page_layout` が false のままだと `SCRIPT_NAME` をキーに

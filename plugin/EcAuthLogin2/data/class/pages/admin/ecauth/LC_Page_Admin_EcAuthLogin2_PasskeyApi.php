@@ -115,11 +115,15 @@ class LC_Page_Admin_EcAuthLogin2_PasskeyApi extends LC_Page_Admin_Ex
         }
 
         $rpId = $objHelper->getRpId();
-        $externalId = isset($member['login_id']) ? $member['login_id'] : '';
+        // EcAuthDocs#110: external_id は発行元における不変キー（member_id 由来）。管理画面から
+        // 変更できる login_id は使わない。人が読むアカウント名（認証器に表示される）は
+        // user_name として別に渡す。形式の根拠は SC_Helper_EcAuthLogin2::buildExternalId() を参照。
+        $externalId = SC_Helper_EcAuthLogin2::buildExternalId($member['member_id']);
+        $userName = isset($member['login_id']) ? $member['login_id'] : null;
         $displayName = isset($body['display_name']) ? $body['display_name'] : null;
         $deviceName = isset($body['device_name']) ? $body['device_name'] : null;
 
-        $result = $objHelper->registerOptions($rpId, $body['b2b_subject'], $externalId, $displayName, $deviceName);
+        $result = $objHelper->registerOptions($rpId, $body['b2b_subject'], $externalId, $displayName, $deviceName, $userName);
         if ($result['status'] !== 200) {
             $this->respond($result['status'], array('error' => 'register_options_failed'));
 
