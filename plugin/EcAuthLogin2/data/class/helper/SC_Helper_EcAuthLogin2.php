@@ -60,6 +60,15 @@ class SC_Helper_EcAuthLogin2
     public const DEFAULT_MYPAGE_URL = 'https://ec-auth.io/mypage/';
 
     /**
+     * register/options に渡す external_id の接頭辞
+     *
+     * 4 系プラグイン（EcAuthLogin43 / EcAuthLogin40）と共通。buildExternalId() を参照。
+     *
+     * @var string
+     */
+    public const EXTERNAL_ID_PREFIX = 'member:';
+
+    /**
      * プラグイン設定を取得
      *
      * @return array 設定配列（client_id, client_secret, ecauth_base_url, rp_id, ...）
@@ -436,9 +445,15 @@ class SC_Helper_EcAuthLogin2
     /**
      * パスキー登録オプションを取得（client_id + client_secret）
      *
+     * @param string $rpId
+     * @param string $b2bSubject
+     * @param string $externalId 発行元における不変キー（buildExternalId()）。EcAuth はハッシュ化して保持する
+     * @param string|null $displayName
+     * @param string|null $deviceName
+     * @param string|null $userName WebAuthn の user.name（認証器に表示されるアカウント名）。省略時は EcAuth が external_id を使う
      * @return array
      */
-    public function registerOptions($rpId, $b2bSubject, $externalId, $displayName = null, $deviceName = null)
+    public function registerOptions($rpId, $b2bSubject, $externalId, $displayName = null, $deviceName = null, $userName = null)
     {
         $body = array(
             'client_id' => $this->getClientId(),
@@ -447,6 +462,9 @@ class SC_Helper_EcAuthLogin2
             'b2b_subject' => $b2bSubject,
             'external_id' => $externalId,
         );
+        if ($userName !== null) {
+            $body['user_name'] = $userName;
+        }
         if ($displayName !== null) {
             $body['display_name'] = $displayName;
         }
@@ -622,6 +640,42 @@ class SC_Helper_EcAuthLogin2
         );
 
         return $subject;
+    }
+
+    /**
+     * EcAuth の B2B パスキー登録（register/options）に渡す external_id を組み立てる。
+     *
+     * EcAuth は external_id の中身を解釈しない。発行元（client_id）ごとの名前空間の下で
+     * ハッシュ化して保持し、同じ値が来れば同じ管理者として解決する。呼び出し側に要求されるのは
+     * 不変性・一意性・再利用禁止の 3 点（EcAuthDocs#110）。
+     *
+     * 1.1.0 までは dtb_member.login_id を送っていたが、login_id は管理画面から変更できるため
+     * 恒久的なキーにならない（変更すると EcAuth 側では別人になり、プラグイン再インストール時に
+     * 既存の B2BUser へ戻る復旧経路が壊れる）。dtb_member.member_id は採番後に変わらず
+     * 再利用もされないので、こちらを使う。
+     *
+     * 接頭辞 "member:" を付けるのは、旧バージョンが送った login_id のハッシュと衝突させないため。
+     * EC-CUBE は数字のみの login_id を許すので、素の member_id を送ると「login_id = "7" の管理者」と
+     * 「member_id = 7 の管理者」が EcAuth 上で同一の値になり、登録が 409 で弾かれたり、
+     * 再インストール後に別人へ解決されたりする。
+     *
+     * 4 系プラグイン（EcAuthLogin43 / EcAuthLogin40 の Service/B2BExternalId）も同じ形式。
+     * 形式を変えると EcAuth に保持済みの identity と一致しなくなり、再び移行が必要になる。
+     *
+     * 認証器に表示されるアカウント名はここでは扱わない。register/options の user_name に
+     * login_id を別途渡す（EcAuth#544）。
+     *
+     * @param int|string $memberId dtb_member.member_id（SC_Query は文字列で返すことがある）
+     * @return string
+     * @throws InvalidArgumentException 正の整数でない場合
+     */
+    public static function buildExternalId($memberId)
+    {
+        if (!is_numeric($memberId) || (int) $memberId <= 0 || (string) (int) $memberId !== (string) $memberId) {
+            throw new InvalidArgumentException('member_id must be a positive integer.');
+        }
+
+        return self::EXTERNAL_ID_PREFIX.(int) $memberId;
     }
 
     /**
