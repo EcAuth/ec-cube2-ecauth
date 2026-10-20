@@ -29,7 +29,7 @@
         "friendsofphp/php-cs-fixer": "^3.0",
         "nanasess/ec-cube2-class-extends-stubs": "^1.0",
         "phpstan/phpstan": "^1.10",
-        "phpunit/phpunit": "^8.4 || ^9.0",
+        "phpunit/phpunit": "^8.4 || ^9.0 || ^13.0",
         "rector/rector": "^1.0"
     },
     "repositories": [
